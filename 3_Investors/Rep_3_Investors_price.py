@@ -12,7 +12,6 @@ from io import StringIO
 
 
 mail_time = "16:00:00"
-#mail_time = "09:00:00"
 
 date_sii = datetime.date.today().strftime('%Y%m%d')
 date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
