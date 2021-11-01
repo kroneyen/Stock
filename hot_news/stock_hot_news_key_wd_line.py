@@ -9,11 +9,14 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import re
-import line_notify
+#import line_notify
 import random
 
 url ='https://mops.twse.com.tw/mops/web/t05sr01_1'
+##new_windwos =https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1
+#&SEQ_NO=1&SPOKE_TIME=145909&SPOKE_DATE=20210331&COMPANY_ID=6173&skey=6173202103311&firstin=true
 today = datetime.date.today()
+
 
 
 pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
@@ -26,12 +29,18 @@ def get_redis_data(_key):
 
 
 def delete_redis_data(today):
-    yy = today - datetime.timedelta(days=2)
-    yy_key = yy.strftime("%Y%m%d")+'skey_lists'
+    
+     dd = 10 ##days :10
+     while  len(r.keys('*_skey_lists')) >2 and dd > 2 :
+ 
+       yy = today - datetime.timedelta(days=dd)
+       yy_key = yy.strftime("%Y%m%d")+'_skey_lists'
 
-    if r.exists(yy_key) : ### del yesterday key
-       r.delete(yy_key)
-
+       if r.exists(yy_key) : ### del archive  key
+          r.delete(yy_key)
+          
+       dd -=1  
+     
 
 def reurl_API(link_list):
      
@@ -53,7 +62,7 @@ def reurl_API(link_list):
      return reurl_link_list
 
 
-def insert_redis_data(_key,_values,today):
+def insert_redis_data(_key,_values):
     line_display = []
      
     if r.exists(_key) :
@@ -78,6 +87,17 @@ def func(x,key_wd_lists) :
           if re.search(codi,x):
             return 1
             break
+
+
+def send_line_notify(token,msg):
+
+    requests.post(
+    url='https://notify-api.line.me/api/notify',
+    headers={"Authorization": "Bearer " + token},
+    data={'message': msg} 
+    )
+
+
 
 
 
@@ -128,7 +148,6 @@ def  hot_new_key_wd(url,today):
        link_list.append(llink) 
 
 
-     df_hot_new =  pd.DataFrame()
      ###['公司代號', '公司簡稱', '發言日期', '發言時間', '主旨', 'Unnamed: 5']
      ###[發言日期      發言時間  公司代號   公司名稱                                                 主旨         NaN]
      df = df.iloc[:,[0,1,2,3,4]]  ## fileter columns data
@@ -145,31 +164,48 @@ def  hot_new_key_wd(url,today):
      df['skey_lists'] = skey_list
 
      match_row = df[df['key_wd'] == 1]
-     
+     #print(match_row.info()) 
      #### for line display 
-     ###today.year - 1911 = 110 , today.year 2021
-     rediskeys = match_row.iloc[0,2].replace("/","").replace(str(today.year - 1911),str(today.year)) + 'skey_lists'
-     ##1100420skey_lists
-     
-     ### delete acrchive data 
-     delete_redis_data(today)
+     if not match_row.empty :
+       ###today.year - 1911 = 110 , today.year 2021
+       rediskeys = match_row.iloc[0,2].replace(str(today.year - 1911),str(today.year)).replace("/","") + '_skey_lists'
+       ##1100420skey_lists
+       ### delete acrchive data 
+       delete_redis_data(today)
  
-     #insert_redis_data('skey_lists',match_row['skey_lists'].values) 
-     line_display_list = insert_redis_data(rediskeys,match_row['skey_lists'].values,today)     
+       #insert_redis_data('skey_lists',match_row['skey_lists'].values) 
+       line_display_list = insert_redis_data(rediskeys,match_row['skey_lists'].values)     
 
-     line_key = get_redis_data("line_key") 
-     ## check new array 
+       #line_key = get_redis_data("line_key") 
+       line_key_list = get_redis_data("line_key") 
+       ## check new array 
 
-     match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)] ### new arrary
-   
-     ## check new array
-     if not match_row_line.empty:
+       match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)] ### new arrary
+       ##short url 
+       match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values)
+
+       match_row_line_notify = match_row_line.iloc[:,[0,1,3,4,8]]  ## for line notify
+       match_row_line_notify = match_row_line_notify.astype({'公司代號':int})  ##fix dtype folat to int64
+     
+       ## check new array
+       if not match_row_line.empty:
+          msg = match_row_line_notify.to_string(index = False)
+          ### for multiple line group
+          for line_key in  line_key_list :
+              #line_notify.post_line_notify(line_key,match_row_line_notify.to_string(index = False))
+              send_line_notify(line_key,msg)
+              time.sleep(random.randrange(1, 3, 1))
+              #time.sleep(round(random.uniform(0.5, 1.0), 10))
+
         ##short url for reurl api
-        match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values)
-        match_row_line_notify = match_row_line.iloc[:,[0,1,3,4,8]]  ## choose column for line notify
-        match_row_line_notify = match_row_line_notify.astype({'公司代號':int})  ##fix dtype folat to int64
-        ## notify to line
-        line_notify.post_line_notify(line_key,match_row_line_notify.to_string(index = False))
+       #   match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values)
+       #   match_row_line_notify = match_row_line.iloc[:,[0,1,3,4,8]]  ## choose column for line notify
+       #   match_row_line_notify = match_row_line_notify.astype({'公司代號':int})  ##fix dtype folat to int64
+
+
+       
+     else : 
+           match_row_line_notify = match_row.info()
 
 
      return match_row_line_notify
