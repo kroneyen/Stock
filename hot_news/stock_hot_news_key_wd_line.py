@@ -31,7 +31,7 @@ def get_redis_data(_key):
 def delete_redis_data(today):
     
      dd = 10 ##days :10
-     while  len(r.keys('*_skey_lists')) >2 and dd > 2 :
+     while  len(r.keys('*_skey_lists')) >2 and dd > 1 :
  
        yy = today - datetime.timedelta(days=dd)
        yy_key = yy.strftime("%Y%m%d")+'_skey_lists'
@@ -54,8 +54,21 @@ def reurl_API(link_list):
      for link in link_list : 
        uurl = link.split('href="')[1].split('">')[0] 
        s_data = {"url": uurl}
+
        r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
-       reurl_link_list.append(r["short_url"])
+
+       try :
+           rerul_link = r["short_url"]
+       except :
+           rerul_link = link
+
+       reurl_link_list.append(rerul_link)
+
+
+
+
+#       r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
+#       reurl_link_list.append(r["short_url"])
        
        time.sleep(round(random.uniform(0.5, 1.0), 10)) 
 
@@ -180,7 +193,7 @@ def  hot_new_key_wd(url,today):
        line_key_list = get_redis_data("line_key") 
        ## check new array 
 
-       match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)] ### new arrary
+       match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)].copy() ### new arrary
        ##short url 
        match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values)
 
@@ -189,23 +202,20 @@ def  hot_new_key_wd(url,today):
      
        ## check new array
        if not match_row_line.empty:
-          msg = match_row_line_notify.to_string(index = False)
-          ### for multiple line group
-          for line_key in  line_key_list :
-              #line_notify.post_line_notify(line_key,match_row_line_notify.to_string(index = False))
-              send_line_notify(line_key,msg)
-              time.sleep(random.randrange(1, 3, 1))
-              #time.sleep(round(random.uniform(0.5, 1.0), 10))
-
-        ##short url for reurl api
-       #   match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values)
-       #   match_row_line_notify = match_row_line.iloc[:,[0,1,3,4,8]]  ## choose column for line notify
-       #   match_row_line_notify = match_row_line_notify.astype({'公司代號':int})  ##fix dtype folat to int64
-
+          
+          for match_row_index in range(0,len(match_row_line),5) :
+              ### for line notify msg 1000  character limit 
+              msg = match_row_line_notify.iloc[match_row_index:match_row_index+5,:].to_string(index = False)   
+              ### for multiple line group
+              for line_key in  range(len(line_key_list)-1) : ## Stock_YoY[0]/Stock[1]
+                  send_line_notify(line_key_list[line_key],msg)
+                  time.sleep(random.randrange(1, 3, 1))
+                  #time.sleep(round(random.uniform(0.5, 1.0), 10))
 
        
      else : 
            match_row_line_notify = match_row.info()
+           print(match_row_line_notify)
 
 
      return match_row_line_notify
