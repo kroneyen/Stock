@@ -11,9 +11,9 @@ import redis
 import send_mail
 
 date_1 = datetime.date.today().strftime('%Y%m%d')
-#date_1='20220623'
+#date_1='20220906'
 
-mail_time = '18:00:00'
+mail_time = '12:00:00'
 
 ### redis connection & data 
 
@@ -59,6 +59,14 @@ def insert_mongo_db(_db,_collection,_values):
     collection.insert(_values)
 
 
+
+def insert_many_mongo_db(_db,_collection,_values):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.insert_many(_values)
+
+  
+
 def drop_mongo_db(_db,_collection):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
@@ -69,6 +77,13 @@ def read_aggregate_mongo_db(_db,_collection,dicct):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
     return collection.aggregate(dicct)
+
+
+def delete_many_mongo_db(_db,_collection,dicct):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.delete_many(dicct)
+
 
 
 def get_mongo_last_date(cal_day):
@@ -235,7 +250,8 @@ def Alert_Stock_Exchange(date_1):
    ### cal  continue  +/-5,10 days 
    match_row = pd.DataFrame()
    com_df = pd.DataFrame()
-   for cal_day in [3,5] :
+   #for cal_day in [3,5] :
+   for cal_day in [3,5,10] :
    
       set_date=get_mongo_last_date(cal_day)
    
@@ -267,6 +283,7 @@ def Alert_Stock_Exchange(date_1):
          idx_code_list.append(idx.get('_id').get('code'))
          idx_name_list.append(idx.get('_id').get('name'))
          
+         #total_diff_selling_short_balance_list.append(idx.get('diff_selling_short_balance'))
          total_diff_selling_short_balance_list.append(idx.get('diff_selling_short_balance'))
          
       #print(total_diff_selling_short_balance_list)   
@@ -277,26 +294,28 @@ def Alert_Stock_Exchange(date_1):
       pyload_total = { '公司代號' : idx_code_list ,
                 '公司簡稱' : idx_name_list,   
                 key_day_total : total_diff_selling_short_balance_list }  
-     
+    
+    
       com_toal = pd.DataFrame(pyload_total)
-      
-      if match_row.empty  :
    
-        match_row = com_toal
+      #print("com_toal:",com_toal)   
+      if com_df.empty  :
+   
+        com_df = com_toal
    
       else :
    
-        com_df = pd.merge(match_row,com_toal,on = ['公司代號','公司簡稱'],how='left')
+        com_df = pd.merge(com_df,com_toal,on = ['公司代號','公司簡稱'],how='left')
    
    
-   
-   #date_1='20220620'
-   
-   com_df['continue_days'] = com_df['5day_balance'].apply(lambda  x: 3  if pd.isnull(x)  else 5 )
+   #print(com_df.info())
+   #com_df['continue_days'] = com_df['5day_balance'].apply(lambda  x: 3  if pd.isnull(x)  else 5 )
+   com_df['continue_days'] = com_df.apply(lambda  x: 10  if pd.notnull(x['10day_balance'])  else 5 if pd.notnull(x['5day_balance'])  else 3  ,axis=1)
    ###instead  
-   com_df['continue_selling_short_balance_total'] = com_df.apply(lambda  x: x['3day_balance']  if pd.isnull(x['5day_balance'])  else x['5day_balance'] ,axis=1).astype('int64')
+   #com_df['continue_selling_short_balance_total'] = com_df.apply(lambda  x: x['3day_balance']  if pd.isnull(x['5day_balance'])  else x['5day_balance'] ,axis=1).astype('int64')
+   com_df['continue_selling_short_balance_total'] = com_df.apply(lambda  x: x['10day_balance']  if pd.notnull(x['10day_balance'])  else x['5day_balance'] if pd.notnull(x['5day_balance']) else x['3day_balance'] ,axis=1)
    
-   
+   #print(com_df)
    last_code=[]
    last_selling_short_balance =[]
    last_modify_mydoc = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":date_1},{"code":1,"selling_short_balance":1,"_id":0})
@@ -313,11 +332,19 @@ def Alert_Stock_Exchange(date_1):
    
    com_df = com_df.astype({'total_balance':'int64'})
    
-    
-   com_df['continue_selling_short_balance_total%'] =  round(round(com_df['continue_selling_short_balance_total']/com_df['total_balance'],4)*100 ,2)
    
-   com_df = com_df.iloc[:,[0,1,4,5,6,7]]
+ 
+   com_df['continue_selling_short_balance_total%'] =  round(round(com_df['continue_selling_short_balance_total']/com_df['total_balance'],4)*100 ,2)
+   #com_df = com_df.astype({'continue_days':'int64','continue_selling_short_balance_total':'int64'})
 
+   #com_df['continue_days'] = round(com_df['continue_days'],0).astype(int)
+   #com_df['continue_selling_short_balance_total'] = round(com_df['continue_selling_short_balance_total'],0).astype(int)
+
+   com_df = com_df.iloc[:,[0,1,5,6,7,8]]
+   #for i in ['continue_days','continue_selling_short_balance_total'] :
+   # com_df[i] =round((com_df[i]/1),0).astype(int)
+
+   #print(com_df)
    #com_df = com_df[com_df['借券賣出餘額差'] != 0]
    return com_df.reset_index(drop=True)
 
@@ -345,6 +372,7 @@ match_row_1=pd.DataFrame()
 match_row = Rep_Stock_Exchange(date_1)
 
 
+"""
 ### insert into local  mongodb 
 for index in range(len(match_row)) :
    # print(str(df.iloc[index,0])+' "' +str(df.iloc[index,1])+'" ',str(df.iloc[index:0])+'_p "'+str(df.iloc[index:2])+'"')
@@ -354,9 +382,31 @@ for index in range(len(match_row)) :
 
    insert_mongo_db('stock','Rep_Stock_Exchange',_values)
 
- 
-time.sleep(1)
+"""
 
+### insert into local  mongodb 
+records = pd.DataFrame()
+records = match_row.copy()
+records["last_modify"]= date_1
+records.columns= ['code','name','lending','back','diff','selling_short','selling_short_back','be_selling_short_balance','selling_short_balance','diff_selling_short_balance','price','last_modify']
+
+for idx in records.columns : 
+    records[idx] = records[idx].astype('str')
+
+#records =records.to_dict(orient='records')
+### get db ori data
+db_records = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":date_1},{"_id":0})
+db_records_df =  pd.DataFrame(list(db_records))
+### compare db data  and web data
+chk = records.equals(db_records_df)
+if chk == False :
+   
+   dicct = {"last_modify":date_1}
+   delete_many_mongo_db('stock','Rep_Stock_Exchange',dicct)
+   
+   records =records.to_dict(orient='records')
+   insert_many_mongo_db('stock','Rep_Stock_Exchange',records)
+time.sleep(1)
 
 
 #### merge Alert_Stock_Exchange
@@ -377,17 +427,23 @@ match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,8,9,11,12,14,10]]
 match_row.columns = ['代號',	'公司',	'借券',	'還券',	'借券差',	'借券賣出',	'借券賣出還券',	'前日借券賣出餘額',	'借券賣出餘額',	
             '借券賣出餘額差','連續天(+)','連續天總額(+)','連續天總額%(+)','收盤價']
 
+match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False)
+
 ### adding nenagive vlues to red
-for  idx in [4,9] :
+for  idx in [4,9,12] :
 
     if idx ==4 or idx==9 :
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if x < 0 else str(x))
+         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+    elif idx == 12 : 
+         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if pd.notna(x) and x  > 15  else x)
+    #elif idx == 10 or idx ==11 :
+    #     match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: round(x,0)  if pd.notna(x)  else x)
+
+
 
 
 ###send mail
-
-
-if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
+if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and chk == False :
 
     if not match_row.empty :
        body = match_row.to_html(escape=False)
