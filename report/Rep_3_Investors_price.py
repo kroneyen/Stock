@@ -19,8 +19,8 @@ mail_time = "18:00:00"
 date_sii = datetime.date.today().strftime('%Y%m%d')
 date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
 
-#date_sii='20220906'
-#date_otc='111/09/06'
+#date_sii='20230215'
+#date_otc='112/02/15'
 
 match_row = pd.DataFrame()
 
