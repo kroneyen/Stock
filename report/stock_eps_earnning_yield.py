@@ -214,13 +214,18 @@ for idx in mydoc :
    com_lists.append(idx.get('code'))
 
 
-
-
 mydoc_season = read_mongo_db('stock','Rep_Stock_Season',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
+mydoc_code_lists=[]
 
-#if len(list(mydoc_season)) == 0  and match_row.empty:
-if len(list(mydoc_season)) != len(com_lists) :
+for idx in mydoc_season :
+   mydoc_code_lists.append(idx.get('code'))
 
+mydoc_code_lists.sort()
+com_lists.sort()
+
+
+### compare mydoc_code_lists & com_lists 
+if mydoc_code_lists != com_lists :
 
    try :
 
@@ -241,7 +246,6 @@ if len(list(mydoc_season)) != len(com_lists) :
         time.sleep(1)
 
         the_year = stock_season_report( yy ,season -1 ,'undefined','undefined',com_lists)  ## the year season 
-
 
 
    #print('the_year:',the_year)
@@ -265,9 +269,14 @@ if len(list(mydoc_season)) != len(com_lists) :
    #match_row["years"] = yy
    #match_row.columns =["code","code_name","the_year", "last_year" , "EPS_g%" , "season" , "years"]  
    match_row.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
-
+   code_list = list(match_row["code"])
+   code_list.sort()
+   com_lists.sort()
+   #print( "match_row:" ,code_list,type(code_list))
+   #print( "com_lists:" ,com_lists,type(com_lists) )
    
-   if not match_row.empty and (len(match_row) != len(com_lists)) :
+   #if not match_row.empty and (len(match_row) != len(com_lists)) :
+   if not match_row.empty and ( code_list != com_lists)  :
 
       records = match_row.copy()
       records["season"] = str(season)
