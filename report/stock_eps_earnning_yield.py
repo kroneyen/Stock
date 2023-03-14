@@ -11,6 +11,7 @@ import send_mail
 from pymongo import MongoClient
 
 
+#mail_time = "09:00:00"
 mail_time = "21:00:00"
 
 def color_red(val):
@@ -72,7 +73,16 @@ def read_aggregate_mongo_db(_db,_collection,dicct):
     return collection.aggregate(dicct)
 
 
+def insert_many_mongo_db(_db,_collection,_values):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.insert_many(_values)
 
+
+def delete_many_mongo_db(_db,_collection,_values):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.delete_many(_values)
 
 
 ### mongodb atlas connection
@@ -106,7 +116,7 @@ def get_mongo_last_date():
 
 
 
-def stock_season_report(year, season, yoy_up,yoy_low):
+def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     pd.options.display.max_rows = 3000
     pd.options.display.max_columns 
     pd.options.display.max_colwidth = 200 
@@ -146,13 +156,13 @@ def stock_season_report(year, season, yoy_up,yoy_low):
        #u_index +=1 
 
        time.sleep(1)
-
+    """
     ### get atlas mongodb data 
     mydoc = atlas_read_mongo_db("stock","com_list",{},{"_id":0,"code":1})
     com_lists = []
     for idx in mydoc :
      com_lists.append(idx.get('code'))
-
+    """
 
     df_f[0]= df_f[0].astype('str')
     ### filter com_lists data
@@ -196,59 +206,120 @@ else :
       last_yy = today.year -1
 
 
-"""
 
-try :
+### get atlas mongodb data 
+mydoc = atlas_read_mongo_db("stock","com_list",{},{"_id":0,"code":1})
+com_lists = []
+for idx in mydoc :
+   com_lists.append(idx.get('code'))
 
-        #last_year = stock_season_report(today.year -1 ,season ,'undefined','undefined')  ## last year season
-        last_year = stock_season_report( last_yy ,season ,'undefined','undefined')  ## last year season
-
-        time.sleep(1)
-
-        #the_year = stock_season_report(today.year,season,'undefined','undefined')  ## the year season
-        the_year = stock_season_report(yy ,season,'undefined','undefined')  ## the year season
-
-
-except :
-         
-        ### if no data  get last season
-        last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined')  ## last year season
-
-        time.sleep(1)
-
-        the_year = stock_season_report( yy ,season -1 ,'undefined','undefined')  ## the year season 
-
-
-
-#print('the_year:',the_year)
-#print('last_year:',last_year)
-#s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
-s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
-
-#print('s_df:',s_df)
-#### (累計EPS / 去年累計EPS - 1) * 100% 
-s_df['EPS成長%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
-
-
-#print(s_df.info())
-
-#s_df['EPS成長%'] = (( (s_df['Q3累積盈餘_2021'] - (s_df['Q3累積盈餘_2020']).abs() )/ (s_df['Q3累積盈餘_2020']).abs() ) * 100 ).round(2) 
-
-
-match_row = s_df.sort_values(by=['EPS成長%'],ascending = False,ignore_index = True).copy()
-#match_row_color = match_row.style.applymap(color_red,subset=[match_row.columns[2],match_row.columns[3],match_row.columns[4]]).set_precision(2).render()
-#match_row_color = s_df_s.style.applymap(color_red, subset=['EPS成長%']).set_precision(2)
-#match_row = df_s.style.applymap(tableColor, subset=['法人', '投信', '自營商','漲跌(+/-)']).set_precision(2)
-#match_row = match_row_color.render()
-"""
 
 
 
 mydoc_season = read_mongo_db('stock','Rep_Stock_Season',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
 
-match_row= pd.DataFrame(list(mydoc_season))
+#if len(list(mydoc_season)) == 0  and match_row.empty:
+if len(list(mydoc_season)) != len(com_lists) :
 
 
+   try :
+
+        #last_year = stock_season_report(today.year -1 ,season ,'undefined','undefined')  ## last year season
+        last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
+
+        time.sleep(1)
+
+        #the_year = stock_season_report(today.year,season,'undefined','undefined')  ## the year season
+        the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
+
+
+   except :
+         
+        ### if no data  get last season
+        last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined',com_lists)  ## last year season
+
+        time.sleep(1)
+
+        the_year = stock_season_report( yy ,season -1 ,'undefined','undefined',com_lists)  ## the year season 
+
+
+
+   #print('the_year:',the_year)
+   #print('last_year:',last_year)
+   #s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
+   s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
+
+   #print('s_df:',s_df)
+   #### (累計EPS / 去年累計EPS - 1) * 100% 
+
+   s_df['EPS成長%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+
+
+   #print(s_df.info())
+
+   #s_df['EPS成長%'] = (( (s_df['Q3累積盈餘_2021'] - (s_df['Q3累積盈餘_2020']).abs() )/ (s_df['Q3累積盈餘_2020']).abs() ) * 100 ).round(2) 
+
+
+   match_row = s_df.sort_values(by=['EPS成長%'],ascending = False,ignore_index = True).copy()
+   #match_row["season"]= season
+   #match_row["years"] = yy
+   #match_row.columns =["code","code_name","the_year", "last_year" , "EPS_g%" , "season" , "years"]  
+   match_row.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
+
+   
+   if not match_row.empty and (len(match_row) != len(com_lists)) :
+
+      records = match_row.copy()
+      records["season"] = str(season)
+      records["years"]  = str(yy)
+
+      records =records.to_dict(orient='records')
+
+      del_filter = {"years":str(yy),"season":str(season)}
+      delete_many_mongo_db('stock','Rep_Stock_Season',del_filter)
+      insert_many_mongo_db('stock','Rep_Stock_Season',records)
+
+      time.sleep(1)
+    ### no data insert & get last season report  
+   else : 
+   
+      mydoc_season = read_mongo_db('stock','Rep_Stock_Season',{"years":str(yy),"season":str(season-1)},{"season":0,"years":0,"_id":0})
+
+      match_row= pd.DataFrame(list(mydoc_season))
+
+    
+ 
+
+###  len(list(mydoc_season)) == len(com_lists)
+else :   
+
+   mydoc_season = read_mongo_db('stock','Rep_Stock_Season',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
+
+   match_row= pd.DataFrame(list(mydoc_season))
+
+
+
+#match_row_color = match_row.style.applymap(color_red,subset=[match_row.columns[2],match_row.columns[3],match_row.columns[4]]).set_precision(2).render()
+#match_row_color = s_df_s.style.applymap(color_red, subset=['EPS成長%']).set_precision(2)
+#match_row = df_s.style.applymap(tableColor, subset=['法人', '投信', '自營商','漲跌(+/-)']).set_precision(2)
+#match_row = match_row_color.render()
+
+
+"""
+#print(match_row.info())
+
+#match_row = stock_season_report(yy,season,'undefined','undefined')
+mydoc_season = read_mongo_db('stock','Rep_Stock_Season',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
+
+if len(list(mydoc_season)) == 0  and match_row.empty: 
+
+   mydoc_season = read_mongo_db('stock','Rep_Stock_Season',{"years":str(yy),"season":str(season-1)},{"season":0,"years":0,"_id":0})
+
+   match_row= pd.DataFrame(list(mydoc_season))
+"""
+
+
+### get last price
 last_modify=get_mongo_last_date()
 last_price = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":last_modify},{"code":1,"price":1,"_id":0})
 mydoc = pd.DataFrame(list(last_price))
@@ -259,11 +330,9 @@ mydoc = pd.DataFrame(list(last_price))
 match_row_doc = pd.merge(match_row,mydoc, on =['code']) ##dataframe join by column
 
 #print(match_row_doc.info())
-#match_row_doc['earn_yield']= round(round(match_row_doc.iloc[:,[2]]/match_row_doc['price'],4)*100 ,2)
 match_row_doc = match_row_doc.astype({match_row_doc.columns[2]:'float',match_row_doc.columns[5]:'float'})
 
 match_row_doc['earn_yield']= round(round(match_row_doc.iloc[:,2]/match_row_doc['price'],4)*100 ,2)
-
 #print(match_row_doc)
 
 match_row=match_row_doc.copy()
@@ -271,7 +340,6 @@ match_row=match_row.sort_values(by=['earn_yield'],ascending = False,ignore_index
 
 for idx in list(range(2,7)) :
     match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
-
 
          
 #match_row['EPS成長%'] = match_row['EPS成長%'].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
