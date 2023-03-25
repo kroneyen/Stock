@@ -164,9 +164,26 @@ match_row = get_Rep_Stock_Holder('nan')
 
 match_row['last_modify']=datetime.datetime.now()
 
+Holder_last_day = get_mongo_cal_date(1)
+Holder_last_day =''.join(Holder_last_day)
 
-records =match_row.to_dict(orient='records')
-insert_many_mongo_db('stock','Rep_Stock_Holder' , records )
+get_rep_Holder_day = match_row.iloc[0,0]
+
+
+### Duplicate check
+if get_rep_Holder_day != Holder_last_day :
+
+ records =match_row.to_dict(orient='records')
+ insert_many_mongo_db('stock','Rep_Stock_Holder' , records )
+ 
+ #print("Holder_last_day:",Holder_last_day,"type:",type(Holder_last_day))
+
+ #print("get_rep_Holder_day:",get_rep_Holder_day,"type:",type(get_rep_Holder_day))
+
+#else: 
+
+
+#print(match_row.iloc[0,0]," is Duplicate Date")
 
 
 """
