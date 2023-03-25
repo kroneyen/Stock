@@ -10,10 +10,17 @@ from pymongo import MongoClient
 import redis
 import send_mail
 
-date_1 = datetime.date.today().strftime('%Y%m%d')
-#date_1='20220906'
 
-mail_time = '12:00:00'
+date_sii = datetime.date.today().strftime('%Y%m%d')
+date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
+
+
+#date_sii = datetime.date.today().strftime('%Y%m%d')
+#date_sii= '20230324'
+#date_otc= '112/03/24'
+
+#mail_time = '09:00:00'
+mail_time = '18:00:00'
 
 ### redis connection & data 
 
@@ -103,8 +110,6 @@ def get_mongo_last_date(cal_day):
  return str(idx_date)
 
 
-### mongodb atlas connection
-
 
 ### mongodb atlas connection
 conn_user = get_redis_data('mongodb_user',"hget","user",'NULL')
@@ -159,11 +164,11 @@ def llist(df_len):
       llist.append(i)
     return llist    
 
-def Rep_Stock_Exchange(date_1) : 
+def Rep_Stock_Exchange(date_sii) : 
 
-  
-  url_SLBNLB = 'https://www.twse.com.tw/exchangeReport/TWT72U?response=html&date='+ date_1 +'&selectType=SLBNLB'  ##借券統計  20220615
-  url = 'https://www.twse.com.tw/exchangeReport/TWT93U?response=html&date='+ date_1 ##借券賣出 20220615 
+  ##### 20230317 web change version  abandoned  
+  url_SLBNLB = 'https://www.twse.com.tw/exchangeReport/TWT72U?response=html&date='+ date_sii +'&selectType=SLBNLB'  ##借券統計  20220615
+  url = 'https://www.twse.com.tw/exchangeReport/TWT93U?response=html&date='+ date_sii ##借券賣出 20220615 
   
   dfs = pd.DataFrame()
   ## conn pyload
@@ -244,8 +249,8 @@ def Rep_Stock_Exchange(date_1) :
 
 
 
-
-def Alert_Stock_Exchange(date_1):
+def Alert_Stock_Exchange(date_sii):
+   ### 20230317 web change version , abandoned function
 
    ### cal  continue  +/-5,10 days 
    match_row = pd.DataFrame()
@@ -318,7 +323,7 @@ def Alert_Stock_Exchange(date_1):
    #print(com_df)
    last_code=[]
    last_selling_short_balance =[]
-   last_modify_mydoc = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":date_1},{"code":1,"selling_short_balance":1,"_id":0})
+   last_modify_mydoc = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":date_sii},{"code":1,"selling_short_balance":1,"_id":0})
    for idx in last_modify_mydoc : 
      last_code.append(idx.get('code'))
      last_selling_short_balance.append(idx.get('selling_short_balance'))
@@ -350,58 +355,200 @@ def Alert_Stock_Exchange(date_1):
 
 
 
+def Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists) :
+  
+  
+  url = 'https://www.twse.com.tw//rwd/zh/lending/TWT72U?response=html&date=' + date_sii ##證商/證金營業統計 SLBNLB 改版
+  ### sii
+  sii = 'https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date='+ date_sii + '&response=html'##借券賣出 20230321 
+  ### oct 
+  otc = 'https://www.tpex.org.tw/web/stock/margin_trading/margin_sbl/margin_sbl_result.php?l=zh-tw&d='+ date_otc +'&s=0,asc,0&o=htm'
+
+  dfs = pd.DataFrame()
+
+  ### get report data 
+  url_list = [url ,sii, otc ]
+  u_index = 0
+  dfs = pd.DataFrame()
+
+  
+  for url in url_list :
+
+     r = requests.get(url)
+     r.encoding = 'utf8'
+     df = pd.read_html(r.text,thousands=",")[0]
+
+     df_len = len(df.columns)
+     df.columns= llist(len(df.columns)) ##編列columns
+
+     if u_index == 0 : ##證券商 
+
+       df = df.iloc[:,[0,1,3,4,5,6]] ## 取的欄位 [證券代號  證券名稱  本日異動股借券(2)  本日異動股還券(3) 本日借券餘額 收盤價]
+       df.columns= llist(len(df.columns))
+       df_SLBNLB = df[df[0].isin(com_lists)] ##比對   
+
+     else :
+
+       #df = df.iloc[:,[0,1,9,10,8,12]]  ## 台灣交易所
+       df = df.iloc[:,[0,9,10,8,12]]  ## 台灣交易所
+
+       df = df[df[0].isin(com_lists)]
+
+       dfs = pd.concat([dfs,df],ignore_index=True) ##合併
+      
+
+     time.sleep(1)
+     u_index += 1
+  
+  ### 合併 SLBNLB sii otc    
+  dfs = pd.merge(df_SLBNLB,dfs,how='left',on=[0]).fillna(0)
+
+  dfs = dfs.astype({2:'int64',3:'int64',4:'int64',9:'int64',10:'int64',8:'int64',12:'int64'}) ##change type
+
+  for i in [2,3,4,9,10,8,12] :
+    
+    dfs[i] =round((dfs[i]/1000),0).astype(int)
+  return dfs
 
 
-"""  
-### loop date insert mongo 
-for date_idx in range(2,0,-1) : 
+def cal_con_days(_db,_collection):                                                                                                                                        
+                                                                                                                                                            
+    set_date=[]                                                                                                                                                 
+    cal_day =1                                                                                                                                                  
+                                                                                                                                                                
+    dictt_30day = [  {"$group": { "_id" : { "$toInt": "$last_modify" }, "sum_coun" : { "$sum" :1} }} , {"$sort" : {"_id" :-1}} , {"$limit" :30},{"$match" : { "_id" : {"$ne": None }}}  	]
+                                          
+    mydoc_30day = read_aggregate_mongo_db(_db,_collection,dictt_30day)  
 
- date_1 =  datetime.datetime.strftime(datetime.date.today() - datetime.timedelta(days =date_idx ),'%Y%m%d')
- try :
-  match_row = Rep_Stock_Exchange(date_1)
- except : 
-  pass 
-"""
+                                                                              
+                                                                                                                                                                
+    ### get 30 day date in mongo data                                                                                                                                                            
+    for idx in mydoc_30day :                                                                                                                                    
+                                                                                                                                                                
+      set_date.append(str(idx.get('_id')))   
+
+                                                                                                                                                                
+    ### last days to check                                                                                                                                      
+    dictt_gt = [ {"$match": { "last_modify" : { "$gte" : str(set_date[0]) }  , "$expr" : { "$gt": [ { "$toInt": "$diff_selling_short_balance" }, 0 ] }   }}  , 
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$diff_selling_short_balance"} } , "sum_coun" : { "$sum" :1}  }}  ,                                
+              {"$match": {"sum_coun" : { "$gte": 1 } } } ,  {"$sort" : {"total_values" : -1}}  ] 
+
+
+    dictt_lt = [ {"$match": { "last_modify" : { "$gte" : str(set_date[0]) }  , "$expr" : { "$lt": [ { "$toInt": "$diff_selling_short_balance" }, 0 ] }   }}  ,                       
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$diff_selling_short_balance"} } , "sum_coun" : { "$sum" : 1}  }}  ,                            
+              {"$match": {"sum_coun" : { "$gte": 1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                                
+                                                                                                                                                                
+                                                                                                                                                                
+    mydoc_gt = read_aggregate_mongo_db(_db,_collection,dictt_gt)                                                                                      
+    mydoc_lt = read_aggregate_mongo_db(_db,_collection,dictt_lt)                                                                                      
+                                                                                                                                                                
+    df_cal_gt = pd.DataFrame(list(mydoc_gt))                                                                                                                    
+    df_cal_lt = pd.DataFrame(list(mydoc_lt))                                                                                                                    
+                                                                                                                                                                
+    cal_data_gt = pd.DataFrame()                                                                                                                                
+    cal_data_lt = pd.DataFrame()                                                                                                                                
+                                                                                                                                                                
+                                                                                                                                                                
+    ### last day data merge cal_data                                                                                                                            
+    cal_data_gt = pd.concat([cal_data_gt,df_cal_gt ], axis=0)                                                                                                   
+    cal_data_lt = pd.concat([cal_data_lt,df_cal_lt ], axis=0)                                                                                                   
+                                                                                                                                                                
+                                                                                                                                                                 
+                                                                                                                                                                
+    while ((not df_cal_gt.empty) or (not df_cal_lt.empty))  and cal_day < len(set_date) :                                                                                                      
+                                                                                                                                                                
+      dictt_gt = [ {"$match": { "last_modify" : { "$gte" : set_date[cal_day]}  , "$expr" : { "$gt": [ { "$toInt": "$diff_selling_short_balance" }, 0 ] }   }}  ,                     
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$diff_selling_short_balance"} } , "sum_coun" : { "$sum" :1}  }}  ,                                
+              {"$match": {"sum_coun" : { "$gte": cal_day+1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                        
+                                                                                                                                                                
+      dictt_lt = [ {"$match": { "last_modify" : { "$gte" : set_date[cal_day] }  , "$expr" : { "$lt": [ { "$toInt": "$diff_selling_short_balance" }, 0 ] }   }}  ,                    
+                 {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$diff_selling_short_balance"} } , "sum_coun" : { "$sum" : 1}  }}  ,                            
+              {"$match": {"sum_coun" : { "$gte": cal_day+1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                        
+                                                                                                                                                                
+      mydoc_gt = read_aggregate_mongo_db(_db,_collection,dictt_gt)                                                                                    
+      mydoc_lt = read_aggregate_mongo_db(_db,_collection,dictt_lt)                                                                                    
+                                                                                                                                                                
+                                                                                                                                                                
+      df_cal_gt = pd.DataFrame(list(mydoc_gt))                                                                                                                  
+
+      if  not df_cal_gt.empty :                                                                                                                                 
+                                                                                                                                                                
+            cal_data_gt = pd.merge(cal_data_gt,df_cal_gt,on = ['_id'],how='left')                                                                               
+                                                                                                                                                                
+            cal_data_gt['total_values'] = cal_data_gt.apply(lambda x: x['total_values_y'] if (pd.notnull(x['total_values_y'])) else x['total_values_x'],axis=1) 
+            cal_data_gt['sum_coun'] = cal_data_gt.apply(lambda x: x['sum_coun_y'] if (pd.notnull(x['sum_coun_y'])) else x['sum_coun_x'],axis=1)                 
+            cal_data_gt = cal_data_gt.drop(['total_values_x','sum_coun_x','total_values_y','sum_coun_y'],axis='columns')                                        
+
+
+      df_cal_lt = pd.DataFrame(list(mydoc_lt))                                                                                                                  
+
+      if  not df_cal_lt.empty :                                                                                                                                 
+                                                                                                                                                                
+           cal_data_lt = pd.merge(cal_data_lt,df_cal_lt,on = ['_id'],how='left')                                                                                
+                                                                                                                                                                
+           cal_data_lt['total_values'] = cal_data_lt.apply(lambda x: x['total_values_y'] if (pd.notnull(x['total_values_y'])) else x['total_values_x'],axis=1)  
+           cal_data_lt['sum_coun'] = cal_data_lt.apply(lambda x: x['sum_coun_y'] if (pd.notnull(x['sum_coun_y'])) else x['sum_coun_x'],axis=1)                  
+           cal_data_lt = cal_data_lt.drop(['total_values_x','sum_coun_x','total_values_y','sum_coun_y'],axis='columns')                                         
+                                                                                                                                                                
+                                                                                                                             
+      cal_day = cal_day + 1                                                                                                                                     
+
+    ### merge data                                                                                                                                         
+    cal_dayy = pd.concat([cal_data_gt,cal_data_lt])                                                                                                             
+                                                                                                                                                                
+    cal_dayy['sum_coun'] = cal_dayy.apply(lambda  x: -x['sum_coun'] if x['total_values'] < 0  else x['sum_coun'],axis=1)                                        
+                         
+    cal_dayy.rename(columns={'_id':'code','sum_coun':'con_days'}, inplace=True)                                                                                                                                                        
+    return cal_dayy
+
+
+
 
 
 #### call function
 
-match_row=pd.DataFrame()
-match_row_1=pd.DataFrame()
-
-match_row = Rep_Stock_Exchange(date_1)
+df_Rep_Stock_Exchange = pd.DataFrame()
+df_cal_con_days = pd.DataFrame()
 
 
-"""
-### insert into local  mongodb 
-for index in range(len(match_row)) :
-   # print(str(df.iloc[index,0])+' "' +str(df.iloc[index,1])+'" ',str(df.iloc[index:0])+'_p "'+str(df.iloc[index:2])+'"')
-   ### for dic {1234 : "aaa" , 1234_p : "otc"}
+mydoc = atlas_read_mongo_db('stock','com_list',{},{'code':1,'_id':0})
+## mongo data to lists
+com_lists=[]
+for idx in mydoc :
+ com_lists.append(idx.get('code'))
 
-   _values = { 'code' : str(match_row.iloc[index,0]) ,'name': str(match_row.iloc[index,1]) , 'lending' : str(match_row.iloc[index,2]),'back' : str(match_row.iloc[index,3]),'diff' : str(match_row.iloc[index,4]),'selling_short' : str(match_row.iloc[index,5]),'selling_short_back' : str(match_row.iloc[index,6]),'be_selling_short_balance' : str(match_row.iloc[index,7]),'selling_short_balance' : str(match_row.iloc[index,8]),'diff_selling_short_balance' : str(match_row.iloc[index,9]),'price' : str(match_row.iloc[index,10]),'last_modify':date_1 }
 
-   insert_mongo_db('stock','Rep_Stock_Exchange',_values)
 
-"""
+df_Rep_Stock_Exchange = Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists)
+### define columns name
+df_Rep_Stock_Exchange.columns = ['code','name','lending','back','lending_balance','price','selling_short','selling_short_back','be_selling_short_balance','selling_short_balance']
+### add 借券差/借券賣出餘額差額
+
+df_Rep_Stock_Exchange['diff_lending'] =(df_Rep_Stock_Exchange['lending'] - df_Rep_Stock_Exchange['back']).copy()
+df_Rep_Stock_Exchange['diff_selling_short_balance'] =(df_Rep_Stock_Exchange['selling_short_balance'] - df_Rep_Stock_Exchange['be_selling_short_balance']).copy()
+
 
 ### insert into local  mongodb 
 records = pd.DataFrame()
-records = match_row.copy()
-records["last_modify"]= date_1
-records.columns= ['code','name','lending','back','diff','selling_short','selling_short_back','be_selling_short_balance','selling_short_balance','diff_selling_short_balance','price','last_modify']
+records = df_Rep_Stock_Exchange.copy()
+records["last_modify"]= date_sii
+###get columns 
+
+records = records.iloc[:,[0,1,2,3,10,4,6,7,8,9,11,5,12]]
+#records.columns= ['code','name','selling_short','selling_short_back','be_selling_short_balance','selling_short_balance','diff_selling_short_balance','price','last_modify']
+
 
 for idx in records.columns : 
     records[idx] = records[idx].astype('str')
 
-#records =records.to_dict(orient='records')
-### get db ori data
-db_records = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":date_1},{"_id":0})
+### check data exist in mongo  
+db_records = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":date_sii},{"_id":0})
 db_records_df =  pd.DataFrame(list(db_records))
-### compare db data  and web data
+### compare dataframe db data  and web data  avoid duplicate data  
 chk = records.equals(db_records_df)
 if chk == False :
    
-   dicct = {"last_modify":date_1}
+   dicct = {"last_modify":date_sii}
    delete_many_mongo_db('stock','Rep_Stock_Exchange',dicct)
    
    records =records.to_dict(orient='records')
@@ -409,36 +556,34 @@ if chk == False :
 time.sleep(1)
 
 
-#### merge Alert_Stock_Exchange
+#### merge cal_con_day data
 
-match_row = match_row[match_row['借券賣出餘額差'] != 0]
-match_row_1 = Alert_Stock_Exchange(date_1)
-match_row = pd.merge(match_row,match_row_1,on = ['公司代號','公司簡稱'],how='left')
+df_cal_con_days = cal_con_days('stock','Rep_Stock_Exchange')
+match_row = df_Rep_Stock_Exchange.copy()
+### filter diff_selling_short_balance 
+match_row = match_row[match_row['diff_selling_short_balance'] != 0]
+match_row = pd.merge(match_row,df_cal_con_days, on =['code']) ##dataframe join by columns
 
-
-
-"""
-公司代號	公司簡稱	借券	還券	借券差	借券賣出	借券賣出還券	前日借券賣出餘額(be_selling_short_balance)	借券賣出餘額( selling_short_balance :8)	借券賣出餘額差	收盤價(10)	
-continue_days(11)	continue_selling_short_balance_total(CSSBT)	total_balance(13)	continue_selling_short_balance_total% (CSSBT%)(14)
-"""
-
-match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,8,9,11,12,14,10]]
-
-match_row.columns = ['代號',	'公司',	'借券',	'還券',	'借券差',	'借券賣出',	'借券賣出還券',	'前日借券賣出餘額',	'借券賣出餘額',	
-            '借券賣出餘額差','連續天(+)','連續天總額(+)','連續天總額%(+)','收盤價']
-
+### add continue_selling_short_balance_total% = 連續total_values/借券賣出餘額  %
+match_row['continue_selling_short_balance_total']= round(round(match_row['total_values']/match_row['selling_short_balance'],4)*100 ,2) 
+##get column
+match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5]] 
+match_row.columns =['代號','名稱','借券','還券','借券差','借券差餘額','借券賣出','借券賣出還券','借券賣出餘額差','借券賣出餘額','con_days','total_values','連續天總額%(+)','收盤價']
 match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False)
 
 ### adding nenagive vlues to red
-for  idx in [4,9,12] :
+for  idx in [4,8,10,11,12] :
+    
+    match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 
+    """
     if idx ==4 or idx==9 :
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
     elif idx == 12 : 
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if pd.notna(x) and x  > 15  else x)
     #elif idx == 10 or idx ==11 :
     #     match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: round(x,0)  if pd.notna(x)  else x)
-
+    """
 
 
 
@@ -447,11 +592,8 @@ if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and chk == False :
 
     if not match_row.empty :
        body = match_row.to_html(escape=False)
-       send_mail.send_email('Rep_Stock_Exchange_%s' % date_1 ,body)
+       send_mail.send_email('Rep_Stock_Exchange_%s' % date_sii ,body)
 
 else :
-    print('Rep_Stock_Exchange_%s' % date_1 )
-    #print(match_row)
+    print('Rep_Stock_Exchange_%s' % date_sii )
     print(match_row.to_html(escape=False))
-    #display(match_row)
-
