@@ -8,16 +8,22 @@ import requests
 import line_notify
 from bs4 import BeautifulSoup
 import send_mail
+from pymongo import MongoClient
+
 
 mail_time = "18:00:00"
+#mail_time = "09:00:00"
+
+def color_red(val):
+    if val < 0:
+        color = 'red'
+    #elif val < 0:
+    #    color = 'green'
+    else:
+        color = 'block'
+    return 'color: %s' % color
 
 
-
-def get_redis_data(_key):
-    pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
-    r = redis.StrictRedis(connection_pool=pool)
-    _list = r.lrange(_key,'0','-1')
-    return _list
 
 
 def llist(df_len):       
@@ -25,6 +31,64 @@ def llist(df_len):
     for i in range(df_len) : 
       llist.append(i)
     return llist
+
+
+
+def get_redis_data(_key,_type,_field_1,_field_2):
+    pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
+    r = redis.StrictRedis(connection_pool=pool)
+
+    if _type == "lrange" :
+       _list = r.lrange(_key,_field_1,_field_2)
+
+    elif _type == "hget" :
+       _list = r.hget(_key,_field_1)
+
+    return _list
+
+
+
+### mongodb atlas connection
+user = get_redis_data('mongodb_user',"hget","user",'NULL')
+pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
+
+conn = MongoClient('mongodb+srv://'+user+':'+pwd+'@cluster0.47rpi.gcp.mongodb.net/myFirstDatabase?retryWrites=true&w=majority')
+
+def atlas_read_mongo_db(_db,_collection,dicct,_columns):
+    db = conn[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns)
+
+
+
+### try to instantiate a client instance for local
+c = MongoClient(
+        host = 'localhost',
+        port = 27017,
+        serverSelectionTimeoutMS = 3000, # 3 second timeout
+        username = "dba",
+        password = "1234",
+    )
+
+
+def insert_many_mongo_db(_db,_collection,_values):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.insert_many(_values)
+
+def delete_many_mongo_db(_db,_collection,dicct):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.delete_many(dicct)
+
+def read_mongo_db(_db,_collection,dicct,_columns):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns)
+
+
+
+
 
 def stock_season_report(year, season, yoy_up,yoy_low):
     pd.options.display.max_rows = 3000
@@ -37,10 +101,13 @@ def stock_season_report(year, season, yoy_up,yoy_low):
     #type_list=['sii','otc']    
      
     df_f = pd.DataFrame()
-    u_index = 0
+    #u_index = 0
     for url in url_list : 
        dfs=pd.DataFrame()
-       r =  requests.post(url)
+       headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1\
+       0_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5304.107 Safari/537.36'}
+
+       r =  requests.post(url,headers=headers)
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -48,42 +115,54 @@ def stock_season_report(year, season, yoy_up,yoy_low):
         df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
         dfs = pd.concat([dfs,df],ignore_index=True) ##合併
        dfs.columns= llist(len(dfs.columns)) ##重新編列columns
-       
-       if u_index == 0 : ##取的欄位
-        dfs = dfs.iloc[:,[0,1,21]]
-        dfs.columns= llist(len(dfs.columns)) ##重新編列columns
-       else : ##取的欄位
-        dfs = dfs.iloc[:,[0,1,21]] 
-        dfs.columns= llist(len(dfs.columns)) ##重新編列columns
-       
+       dfs = dfs.iloc[:,[0,1,21]]
+       dfs.columns= llist(len(dfs.columns)) ##重新編列columns 
+  
+    
+       """
+       if year == 2021 : ## 欄位不同
+          dfs = dfs.iloc[:,[0,1,21]]
+          dfs.columns= llist(len(dfs.columns)) ##重新編列columns 
+       else :
+           dfs = dfs.iloc[:,[0,1,29]]
+           dfs.columns= llist(len(dfs.columns)) ##重新編列columns        
+       """
+       dfs.columns= llist(len(dfs.columns)) ##重新編列columns
        df_f = pd.concat([df_f,dfs],ignore_index=True) ###合併
        
-       u_index +=1 
+       #u_index +=1 
 
        time.sleep(1)
 
+    ### get atlas mongodb data 
+    mydoc = atlas_read_mongo_db("stock","com_list",{},{"_id":0,"code":1})
+    com_lists = []
+    for idx in mydoc :
+     com_lists.append(idx.get('code'))
 
+
+    df_f[0]= df_f[0].astype('str')
+    ### filter com_lists data
+    df_f =df_f[df_f[0].isin(com_lists)]
     df_f = df_f.sort_values(by=[2],ascending = False,ignore_index = True) ## 排序
     sst = "Q%s累計盈餘" %(season)
     #df_f.columns = ['公司代號', '公司簡稱','基本每股盈餘（元）' ]  ##定義欄位
     df_f.columns = ['公司代號', '公司簡稱',sst ]  ##定義欄位
-    com_lists = get_redis_data("com_list")
 
-    match_row_f =df_f[df_f['公司代號'].isin(com_lists)]
-
-    return match_row_f
+    return df_f
 
 
 ###  5/15,8/14,11/14,3/31
 
 today = datetime.date.today()
+#today = datetime.datetime.strptime('20221101', '%Y%m%d')
 
-if today.month > 4 and today.month< 6 :
+if today.month > 4 and today.month<= 6 :
   season = 1
-elif  today.month > 7 and today.month< 9 :
+elif  today.month > 7 and today.month<= 9 :
   season = 2 
 
-elif  today.month > 10 and today.month< 12 :
+elif  today.month > 10 and today.month<= 12 :
   season = 3
 else :
   season = 4 
@@ -94,31 +173,86 @@ else :
 
 s_df = pd.DataFrame()
 
-last_year = stock_season_report(today.year -1 ,season ,'undefined','undefined')  ## last year season
 
-time.sleep(1)
+###  season cal 
+if season == 4  :
+     yy = today.year -1
+     last_yy = today.year -2
+else :
+### last season replort
+      yy = today.year
+      last_yy = today.year -1
 
-the_year = stock_season_report(today.year,season,'undefined','undefined')  ## the year season
 
-s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
+
+
+try :
+
+        #last_year = stock_season_report(today.year -1 ,season ,'undefined','undefined')  ## last year season
+        last_year = stock_season_report( last_yy ,season ,'undefined','undefined')  ## last year season
+
+        time.sleep(1)
+
+        #the_year = stock_season_report(today.year,season,'undefined','undefined')  ## the year season
+        the_year = stock_season_report(yy ,season,'undefined','undefined')  ## the year season
+
+
+except :
+         
+        ### if no data  get last season
+        last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined')  ## last year season
+
+        time.sleep(1)
+
+        the_year = stock_season_report( yy ,season -1 ,'undefined','undefined')  ## the year season 
+
+
+
+s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
 
 #### (累計EPS / 去年累計EPS - 1) * 100% 
 s_df['EPS成長%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
 
-#s_df['EPS成長%'] = (( (s_df['Q3累積盈餘_2021'] - (s_df['Q3累積盈餘_2020']).abs() )/ (s_df['Q3累積盈餘_2020']).abs() ) * 100 ).round(2) 
+match_row = s_df.sort_values(by=['EPS成長%'],ascending = False,ignore_index = True).copy()
 
 
-match_row = s_df.sort_values(by=['EPS成長%'],ascending = False).copy()
 
-         
+### insert to mongo 
+records = match_row.copy()
+
+records['season']= season
+records['years']= yy
+
+records.columns =['code','code_name','the_year','last_year','EPS_g%','season','years']
+records = records.astype({'season':'string','years':'string'})
+
+#records = records.to_dict(orient='records')
+dicct={"season" : str(season), "years" : str(yy)}
+
+### check data is exist on  mongo 
+db_records = read_mongo_db('stock','Rep_Stock_Season',{"season" : str(season),"years" : str(yy)},{"_id":0})
+db_records_df =  pd.DataFrame(list(db_records))
+
+chk = records.equals(db_records_df)
+if chk == False :
+
+   dicct = {"season" : str(season),"years" : str(yy)}
+   delete_many_mongo_db('stock','Rep_Stock_Season',dicct)
+
+   records =records.to_dict(orient='records')
+   insert_many_mongo_db('stock','Rep_Stock_Season',records)
+time.sleep(1)
+
+
+for idx in list(range(2,5)) :
+    match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
 
 
 
 if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
-    #match_row.to_html('hot_news_link.log')
+
     if not match_row.empty :
-       body = match_row.to_html(escape=False)
-       #log_date = datetime.date.today().strftime("%Y-%m-%d")
-       send_mail.send_email('{year} stock_Q{season}_report' .format(year = today.year ,season=season) ,body)
+       body = match_row.to_html(classes='table table-striped',escape=False)
+       send_mail.send_email('{year}_stock_Q{season}_report' .format(year = yy ,season=season) ,body)
 else :
-    print(match_row.to_string(index=False))
+    print(match_row.to_html(escape=False))
