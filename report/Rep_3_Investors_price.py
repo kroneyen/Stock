@@ -19,8 +19,8 @@ mail_time = "18:00:00"
 date_sii = datetime.date.today().strftime('%Y%m%d')
 date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
 
-#date_sii='20230215'
-#date_otc='112/02/15'
+#date_sii='20230322'
+#date_otc='112/03/22'
 
 match_row = pd.DataFrame()
 
@@ -133,7 +133,8 @@ def read_aggregate_mongo_db(_db,_collection,dicct):
 def Rep_3_Investors(date_sii,date_otc,com_lists) : 
 
 
-  url_sii ='https://www.twse.com.tw/fund/T86?response=html&date='+ date_sii +'&selectType=ALL'
+  #url_sii ='https://www.twse.com.tw/fund/T86?response=html&date='+ date_sii +'&selectType=ALL'
+  url_sii ='https://www.twse.com.tw/rwd/zh/fund/T86?response=html&date='+ date_sii +'&selectType=ALL'
   url_otc ='https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=htm&se=EW&t=D&d=' + date_otc + '&s=0,asc'
   url_list = [url_sii,url_otc]
   dfs = pd.DataFrame()
@@ -274,9 +275,6 @@ df_Rep_price = Rep_price(date_sii,date_otc,com_lists)
 df_s = pd.merge(df_Rep_3_Investors,df_Rep_price, on =['公司代號']) ##dataframe join by columns
 df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
 df_s = df_s.iloc[:,[0,1,2,3,4,5,7,8]]
-#df_s = df_s.fillna(0)
-#match_row = df_s.style.applymap(tableColor, subset=['法人', '投信', '自營商','漲跌(+/-)']).set_precision(2)
-#match_row = df_s
 match_row = df_s.sort_values(by=['漲跌(+/-)'],ascending=False,ignore_index= True).copy()
 
 ##insert local mongo
@@ -300,16 +298,6 @@ if com_lists != local_redis :
      insert_redis_data('com_list',com)
 
  
-### insert into mongodb 
-"""
-for index in range(len(match_row)) :
-   # print(str(df.iloc[index,0])+' "' +str(df.iloc[index,1])+'" ',str(df.iloc[index:0])+'_p "'+str(df.iloc[index:2])+'"')
-   ### for dic {1234 : "aaa" , 1234_p : "otc"}
-
-   _values = { 'code' : str(match_row.iloc[index,0]) ,'name': str(match_row.iloc[index,1]) , 'foreign' : str(match_row.iloc[index,2]),'trust' : str(match_row.iloc[index,3]),'dealer' : str(match_row.iloc[index,4]),'total' : str(match_row.iloc[index,5]),'last_modify':date_sii }
-
-   insert_mongo_db('stock','Rep_3_Investors',_values)
-"""
 
 ### insert into local  mongodb 
 records = pd.DataFrame()
@@ -332,163 +320,143 @@ time.sleep(1)
 
 ### sync local mongo & redis data of com_list
 
+                                                                                                                                                          
+def cal_con_days(_db,_collection):                                                                                                                                        
+                                                                                                                                                            
+    set_date=[]                                                                                                                                                 
+    cal_day =1                                                                                                                                                  
+                                                                                                                                                                
+    dictt_30day = [ {"$group": { "_id" : { "$toInt": "$last_modify" } }} , {"$sort" : {"_id" :-1}} , {"$limit" :30}]                                            
+    mydoc_30day = read_aggregate_mongo_db(_db,_collection,dictt_30day)                                                                                
+                                                                                                                                                                
+    ### get 30 day date in mongo data                                                                                                                                                            
+    for idx in mydoc_30day :                                                                                                                                    
+                                                                                                                                                                
+      set_date.append(str(idx.get('_id')))                                                                                                                      
+    
+    ### last days to check                                                                                                                                      
+    dictt_gt = [ {"$match": { "last_modify" : { "$gte" : str(set_date[0]) }  , "$expr" : { "$gt": [ { "$toInt": "$total" }, 0 ] }   }}  ,                       
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" :1}  }}  ,                                
+              {"$match": {"sum_coun" : { "$gte": 1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                                
+                                                                                                                                                                
+    dictt_lt = [ {"$match": { "last_modify" : { "$gte" : str(set_date[0]) }  , "$expr" : { "$lt": [ { "$toInt": "$total" }, 0 ] }   }}  ,                       
+                 {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" : 1}  }}  ,                            
+              {"$match": {"sum_coun" : { "$gte": 1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                                
+                                                                                                                                                                
+                                                                                                                                                                
+    mydoc_gt = read_aggregate_mongo_db(_db,_collection,dictt_gt)                                                                                      
+    mydoc_lt = read_aggregate_mongo_db(_db,_collection,dictt_lt)                                                                                      
+                                                                                                                                                                
+    df_cal_gt = pd.DataFrame(list(mydoc_gt))                                                                                                                    
+    df_cal_lt = pd.DataFrame(list(mydoc_lt))                                                                                                                    
+                                                                                                                                                                
+    cal_data_gt = pd.DataFrame()                                                                                                                                
+    cal_data_lt = pd.DataFrame()                                                                                                                                
+                                                                                                                                                                
+                                                                                                                                                                
+    ### last day data merge cal_data                                                                                                                            
+    cal_data_gt = pd.concat([cal_data_gt,df_cal_gt ], axis=0)                                                                                                   
+    cal_data_lt = pd.concat([cal_data_lt,df_cal_lt ], axis=0)                                                                                                   
+                                                                                                                                                                
+                                                                                                                                                               
+                                                                                                                                                            
+    while ((not df_cal_gt.empty) or (not df_cal_lt.empty)) and cal_day < len(set_date):                                                                                                      
+      
+                                                                                                                                                                
+      dictt_gt = [ {"$match": { "last_modify" : { "$gte" : set_date[cal_day] }  , "$expr" : { "$gt": [ { "$toInt": "$total" }, 0 ] }   }}  ,                     
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" :1}  }}  ,                                
+              {"$match": {"sum_coun" : { "$gte": cal_day+1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                        
+    
+                                                                                                                                                            
+      dictt_lt = [ {"$match": { "last_modify" : { "$gte" : set_date[cal_day] }  , "$expr" : { "$lt": [ { "$toInt": "$total" }, 0 ] }   }}  ,                    
+                 {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" : 1}  }}  ,                            
+              {"$match": {"sum_coun" : { "$gte": cal_day+1 } } } ,  {"$sort" : {"total_values" : -1}}  ]                                                        
 
 
+      mydoc_gt = read_aggregate_mongo_db(_db,_collection,dictt_gt)                                                                                    
+      mydoc_lt = read_aggregate_mongo_db(_db,_collection,dictt_lt)                                                                                    
+                                                                                                                                                                
+                                                                                                                                                                
+      df_cal_gt = pd.DataFrame(list(mydoc_gt))                                                                                                                  
 
-def get_mongo_last_date(cal_day):
- ### mongo query for last ? days
- dictt_set = [ {"$group": { "_id" : { "$toInt" : "$last_modify" } }} , {"$sort" : {"_id" :-1}} , { "$limit" : cal_day},{"$sort" : {"_id" :1}} , { "$limit" :1}]
-
- ### mongo dict data
-
- set_doc =  read_aggregate_mongo_db('stock','Rep_3_Investors',dictt_set)
-
- ### for lists  get cal date 
- for idx in set_doc:
-
-  idx_date = idx.get("_id")
-
- #set_date = str(idx_date)
- return str(idx_date)
+      if  not df_cal_gt.empty :                                                                                                                                 
+                                                                                                                                                                
+            cal_data_gt = pd.merge(cal_data_gt,df_cal_gt,on = ['_id'],how='left')                                                                               
+                                                                                                                                                                
+            cal_data_gt['total_values'] = cal_data_gt.apply(lambda x: x['total_values_y'] if (pd.notnull(x['total_values_y'])) else x['total_values_x'],axis=1) 
+            cal_data_gt['sum_coun'] = cal_data_gt.apply(lambda x: x['sum_coun_y'] if (pd.notnull(x['sum_coun_y'])) else x['sum_coun_x'],axis=1)                 
+            cal_data_gt = cal_data_gt.drop(['total_values_x','sum_coun_x','total_values_y','sum_coun_y'],axis='columns')                                        
 
 
-### cal  continue  +/-5,10 days 
- 
-for cal_day in [5,10] :
+      df_cal_lt = pd.DataFrame(list(mydoc_lt))                                                                                                                  
+
+      if  not df_cal_lt.empty :                                                                                                                                 
+                                                                                                                                                                
+           cal_data_lt = pd.merge(cal_data_lt,df_cal_lt,on = ['_id'],how='left')                                                                                
+                                                                                                                                                                
+           cal_data_lt['total_values'] = cal_data_lt.apply(lambda x: x['total_values_y'] if (pd.notnull(x['total_values_y'])) else x['total_values_x'],axis=1)  
+           cal_data_lt['sum_coun'] = cal_data_lt.apply(lambda x: x['sum_coun_y'] if (pd.notnull(x['sum_coun_y'])) else x['sum_coun_x'],axis=1)                  
+           cal_data_lt = cal_data_lt.drop(['total_values_x','sum_coun_x','total_values_y','sum_coun_y'],axis='columns')                                         
+                                                                                                                                                                
+                                                                                                                             
+      cal_day = cal_day + 1                                                                                                                                     
+
+    ### merge data                                                                                                                                         
+    cal_dayy = pd.concat([cal_data_gt,cal_data_lt])                                                                                                             
+                                                                                                                                                                
+    cal_dayy['sum_coun'] = cal_dayy.apply(lambda  x: -x['sum_coun'] if x['total_values'] < 0  else x['sum_coun'],axis=1)                                        
+                         
+    cal_dayy.columns=['code','total_values','con_days']                                                                                                                                                        
+
+                                                                                                                                                            
+    return cal_dayy.sort_values(by='code',ascending=True,ignore_index= True)                  
+
+
+def  get_auth_stock(_db,_collection,com_lists): 
   
-   set_date=get_mongo_last_date(cal_day) 
-  
-
-   dictt_lt = [ {"$match": { "last_modify" : { "$gte" : set_date}  , "$expr" : { "$lt": [ { "$toInt": "$total" }, 0 ] }   }}  ,{"$group":{"_id": {"code" : "$code" , "name" : "$name"} ,"total_values" : { "$sum" : { "$toInt": "$total"} } ,"sum_coun" : { "$sum" :1}  }}  , {"$match": {"sum_coun" : { "$gte": cal_day } } } ,  {"$sort" : {"total_values" : -1}}  ]
+   ### mongo query com info 
+   dicct_com = [ {"$match" : {"code": { "$in": com_lists } }} , { "$project" :{ "code":1 ,"auth_stock":1,"_id":0}} ]
    
-   dictt_gt = [ {"$match": { "last_modify" : { "$gte" : set_date}  , "$expr" : { "$gt": [ { "$toInt": "$total" }, 0 ] }   }}  ,{"$group":{"_id": {"code" : "$code" , "name" : "$name"} ,"total_values" : { "$sum" : { "$toInt": "$total"} } ,"sum_coun" : { "$sum" :1}  }}  , {"$match": {"sum_coun" : { "$gte": cal_day } } } ,  {"$sort" : {"total_values" : -1}}  ]
+   ### get mongo data
+   mydoc_com_info = read_aggregate_mongo_db(_db,_collection,dicct_com) ## code,auth_stock
+   df_auth_stock = pd.DataFrame(list(mydoc_com_info))  
+   df_auth_stock = df_auth_stock.astype({'auth_stock':'int64'})
    
-
-   
-   idx_lt_list=[]
-   idx_gt_list=[]
-   total_lt_list=[]
-   total_gt_list=[]
-   
-   
-   ### get mongo data 
-   mydoc_lt = read_aggregate_mongo_db('stock','Rep_3_Investors',dictt_lt)
-   mydoc_gt = read_aggregate_mongo_db('stock','Rep_3_Investors',dictt_gt)
-
-   
-   ### lists coms code 
-   
-   for idx in mydoc_lt :
-      idx_lt_list.append(idx.get('_id').get('code'))
-      total_lt_list.append(idx.get('total_values'))
-   
-   for idx in mydoc_gt :
-      idx_gt_list.append(idx.get('_id').get('code'))
-      total_gt_list.append(idx.get('total_values'))
-   
-
-   ### get mongo data of auth_stock
-   
-   if  'auth_stock' not in match_row.columns :
-      ### list search coms 
-      auth_com_list = match_row['公司代號'].tolist()
-      
-      ### mongo query com info 
-      dicct_com = [ {"$match" : {"code": { "$in": auth_com_list } }} , { "$project" :{ "code":1 ,"auth_stock":1}} ]
-      
-      ### get mongo data
-      mydoc_com_info = read_aggregate_mongo_db('stock','com_lists',dicct_com) ## code,auth_stock
-   
-      auth_code_list=[]
-      auth_stock_list=[]
-   
-      ### lists coms code       
-      for idx in mydoc_com_info :
-         auth_code_list.append(idx.get('code'))
-         auth_stock_list.append(idx.get('auth_stock'))
-      
-      ### get auth_stock merge match_row
-      pyload_auth_stock = { '公司代號' : auth_code_list ,
-                        'auth_stock' : auth_stock_list}
-      
-      df_auth_stock = pd.DataFrame(pyload_auth_stock)
-      
-      df_auth_stock = df_auth_stock.astype({'auth_stock':'int64'})
-      
-      ### merge data check         
-      
-      match_row = pd.merge(match_row,df_auth_stock,on = ['公司代號'],how='left')  
-  
-   ###  compare coms_list change data
-   
-   key_day  =  str(cal_day) +'day' 
-   key_day_total = str(cal_day) +'day_total' 
-   key_day_p =  str(cal_day) +'day%'
-   
-   #match_row['5day'] = match_row['公司代號'].apply(lambda  x: -5 if x in idx_lt_list  else 5 if x in idx_gt_list else 0)
-   match_row[key_day] = match_row['公司代號'].apply(lambda  x: -cal_day if x in idx_lt_list  else cal_day if x in idx_gt_list else 0)
-   #id_total = idx_lt_list.extend(idx_gt_list)
-   #total_list = total_lt_list.extend(total_gt_list)
-   idx_lt_list.extend(idx_gt_list)
-   total_lt_list.extend(total_gt_list)
-   
-   
-   pyload_total = { '公司代號' : idx_lt_list ,
-   	     key_day_total : total_lt_list }
-        #'5day_total' : total_lt_list }
-   
-   
-   com_toal = pd.DataFrame(pyload_total)
-   
-   #com_toal = com_toal.fillna(0).astype({'5day_total':'int64'})
-   #com_toal = com_toal.fillna(0).astype({ key_day_total:'int64'})
-   com_toal = com_toal.astype({ key_day_total:'int64'})
+   return df_auth_stock
 
 
 
-   
-   #match_row = pd.merge(match_row,com_toal,on = ['公司代號'],how='left').fillna(0)
-   match_row = pd.merge(match_row,com_toal,on = ['公司代號'],how='left')
-   
-   match_row[key_day_p] = round(round(match_row[key_day_total]/match_row['auth_stock'],4)*100 ,2)
-   #match_row['5day%'] = round(round(match_row['5day_total']/match_row['auth_stock'],4)*100 ,2)
-   
-   #match_row['10day'] = match_row['公司代號'].apply(lambda  x: -10 if x in idx_lt_list  else 0 if x in idx_gt_list else 0)
+
+
+### change column name for merge
+match_row.rename(columns={'公司代號':'code','合計':'total'}, inplace=True)
+
+df_cal_day_conti = cal_con_days('stock','Rep_3_Investors')  ## code	total_values	con_days
+df_auth_stock  = get_auth_stock('stock','com_lists',com_lists) ## "code" : , "auth_stock"
+
+match_row =pd.merge( pd.merge(match_row,df_auth_stock,on = ['code'],how='left'),df_cal_day_conti,on = ['code'],how='left')     
 
 
 ### adding nenagive vlues to red 
 
-#match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,9,10]] ## 公司代號       公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock      5day    5day%   for  hide ['auth_stock']
-#match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,9,11]] ## 公司代號        公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock      5day    5day_total 5day%   for  hide ['auth_stock','5day_total']
+match_row['1day%'] = round(round(match_row['total']/match_row['auth_stock'],4)*100 ,2)
+match_row['con_days%'] = round(round(match_row['total_values']/match_row['auth_stock'],4)*100 ,2)
 
-match_row['1day%'] = round(round(match_row['合計']/match_row['auth_stock'],4)*100 ,2)
+### select column
+match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,11,10,12]]  
+#code 公司簡稱 法人  投信 自營商 total  收盤價 漲跌(+/-)  total_values  auth_stock con_days 1day% con_days%
 
-#match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,9,11,12,14]] ## 公司代號        公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock      5day    5day_total 5day%   10day    10day_total 10day%  for  hide ['auth_stock','5day_total','10day_total']
-match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,15,9,11,12,14]] ## 公司代號        公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock       5day    5day_total 5day%   10day    10day_total 10day%  1day%  for  hide ['auth_stock','5day_total','10day_total']
+for  idx in range(2,11,1) :
 
-match_row['con_days'] = match_row.apply(lambda  x: x['10day']  if x['10day']!= 0  else x['5day']  if x['5day']!= 0 else 0 ,axis =1)
-#match_row['con_days'] = match_row['5day'].apply(lambda  x: 5  if pd.isnull(x)  else 10 )
-###instead  
-match_row['con_days%'] = match_row.apply(lambda  x: x['10day%']  if pd.notna(x['10day%'])  else x['5day%'] if pd.notna(x['5day%']) else 0 ,axis=1)
-
-#match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,9,11,12,14]] ## 公司代號        公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock      5day    5day_total 5day%   10day    10day_total 10day%  for  hide ['auth_stock','5day_total','10day_total']
-#match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,15,9,11,12,14,16,17]] ## 公司代號        公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock       5day(9)    5day_total 5day%   10day    10day_total 10day%  1day%(15),'con_days','con_days%  for  hide ['auth_stock','5day_total','10day_total']
-match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,8,13,14]] ## 公司代號        公司簡稱        法人    投信    自營商  合計    收盤價  漲跌(+/-)       auth_stock       5day(9)    5day_total 5day%   10day    10day_total 10day%  1day%(15),'con_days','con_days%  for  hide ['auth_stock','5day_total','10day_total']
-
-
-for  idx in [2,3,4,5,7,8,9,10] :
-#for  idx in [2,3,4,5,7,8,9,10,11,12] :
-#for  idx in [2,3,4,5,7,8,9,10,11] :
-#for  idx in [2,3,4,5,7,8,9] :
-#for  idx in range(2,10,1) :
     
     if idx ==9 :	
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x  if x >=5  else f'<font color="red">%dday</font>' % x if x < 0 else 0 )
+         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x  if x >0  else f'<font color="red">%s</font>' % x if x < 0 else 0 )
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x if x >=5  else f'<font color="red">%dday</font>' % x if x < 0 else 0 )
     #elif  idx == 10:
     #	   match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x if x >= 10 else f'<font color="red">%dday</font>' % x if x < 0 else 0 )	
-    else :
+    elif idx != 6:
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if x < 0 else str(x))
+
 
 
 ####match_row=Rep_3_Investors(url_list)
@@ -497,13 +465,14 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
 
     if not match_row.empty :
        body = match_row.to_html(escape=False)
-       body_color = body.replace('<td><font color="green">+5</font></td>','<td style="background-color:yellow;"><font color="green">+5</font></td>').replace('<td><font color="green">+10</font></td>','<td style="background-color:yellow;"><font color="green">+10</font></td>').replace('<td><font color="red">-5day</font></td>','<td style="background-color:#D3D3D3;"><font color="red">-5</font></td>').replace('<td><font color="red">-10day</font></td>','<td style="background-color:#D3D3D3;"><font color="red">-10</font></td>')
-       send_mail.send_email('Rep_3_Investors_%s' % date_sii ,body_color)
+       #body = match_row.sort_values(by=['con_days']).to_html(escape=False)
+       #body_color = body.replace('<td><font color="green">+5</font></td>','<td style="background-color:yellow;"><font color="green">+5</font></td>').replace('<td><font color="green">+10</font></td>','<td style="background-color:yellow;"><font color="green">+10</font></td>').replace('<td><font color="red">-5day</font></td>','<td style="background-color:#D3D3D3;"><font color="red">-5</font></td>').replace('<td><font color="red">-10day</font></td>','<td style="background-color:#D3D3D3;"><font color="red">-10</font></td>')
+       #send_mail.send_email('Rep_3_Investors_%s' % date_sii ,body_color)
+       send_mail.send_email('Rep_3_Investors_%s' % date_sii ,body)
 
 else :
     print('Rep_3_Investors_%s' % date_sii )
     #print(match_row)
     print(match_row.to_html(escape=False))
     #display(match_row)
-
 
