@@ -9,6 +9,22 @@ import datetime
 from pymongo import MongoClient
 import redis
 import send_mail
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.font_manager import fontManager
+from fake_useragent import UserAgent
+import del_png
+
+
+
+
+
+# 改style要在改font之前
+plt.style.use('seaborn')  
+fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
+mpl.rc('font', family='Taipei Sans TC Beta')
+
 
 
 date_sii = datetime.date.today().strftime('%Y%m%d')
@@ -16,8 +32,8 @@ date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.da
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20230324'
-#date_otc= '112/03/24'
+#date_sii= '20230407'
+#date_otc= '112/04/07'
 
 #mail_time = '09:00:00'
 mail_time = '18:00:00'
@@ -129,19 +145,6 @@ def atlas_read_mongo_db(_db,_collection,dicct,_columns):
 
 
 
-def atlas_get_mongo_last_date(cal_day):
- ### mongo query for last ? days
- dictt_set = [ {"$group": { "_id" : { "$toInt" : "$last_modify" } }},{"$sort" : {"_id" :-1}} , { "$limit" : cal_day},{"$sort" : {"_id" :1}} , { "$limit" :1}]
-
- ### mongo dict data
-
- set_doc =  atlas_read_aggregate_mongo_db('stock','Rep_Stock_Exchange',dictt_set)
-
- ### for lists  get cal date 
- for idx in set_doc:
-
-  idx_date = idx.get("_id")
-
  #set_date = str(idx_date)
  return str(idx_date)
 
@@ -149,6 +152,7 @@ def read_aggregate_mongo_db(_db,_collection,dicct):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
     return collection.aggregate(dicct)
+
 
 
 
@@ -357,6 +361,7 @@ def Alert_Stock_Exchange(date_sii):
 
 def Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists) :
   
+  user_agent = UserAgent()
   
   url = 'https://www.twse.com.tw//rwd/zh/lending/TWT72U?response=html&date=' + date_sii ##證商/證金營業統計 SLBNLB 改版
   ### sii
@@ -374,7 +379,7 @@ def Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists) :
   
   for url in url_list :
 
-     r = requests.get(url)
+     r = requests.get(url , headers={ 'user-agent': user_agent.random })
      r.encoding = 'utf8'
      df = pd.read_html(r.text,thousands=",")[0]
 
@@ -504,6 +509,53 @@ def cal_con_days(_db,_collection):
 
 
 
+def plot_Rep_Stock_Exchange(match_row) :
+
+   dfs = pd.DataFrame()
+   
+   ### match_row  code con_days
+   cal_day = match_row.iloc[:,[1]].astype('int64').abs().max()
+   #cal_day = match_row.iloc[0,1]   ###max con_days
+   
+   
+   last_modify = get_mongo_last_date(int(cal_day))
+
+   ### dataframe to list 
+   com_lists = match_row.iloc[:,[0]].reset_index(drop=True).squeeze()
+
+
+   for idx in com_lists :
+
+      altas_mydoc = read_mongo_db('stock','Rep_Stock_Exchange',{'code': idx ,'last_modify': {'$gte' : last_modify}},{'_id':0})
+
+      df = pd.DataFrame(list(altas_mydoc))
+
+      df = df.iloc[:,[0,1,9,12]]
+
+      rest_df = pd.DataFrame(data = df['selling_short_balance'].values,columns=[df['code'][0]+'_'+ df['name'][0]] , index=df['last_modify'])
+
+      dfs = pd.concat([dfs,rest_df],axis=1)
+
+
+   ### data to int for plot  
+   records = dfs.astype('int64')
+
+   ### 5 rows for each paint  
+   for idx in range(0,len(records.columns),5):
+
+     idx_records = records.iloc[ : , idx:idx+5 ]
+
+     idx_records.plot(y = idx_records.columns)
+     #idx_records.plot.line(y = idx_records.columns, figsize=(10,6))
+     #idx_records.plot.bar(y = idx_records.columns, figsize=(10,6))
+     ### del png with crontab jobs
+     plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
+
+
+
+### del images/*.png
+del_png.del_images()
+
 
 #### call function
 
@@ -569,7 +621,15 @@ match_row['continue_selling_short_balance_total']= round(round(match_row['total_
 ##get column
 match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5]] 
 match_row.columns =['代號','名稱','借券','還券','借券差','借券差餘額','借券賣出','借券賣出還券','借券賣出餘額差','借券賣出餘額','con_days','total_values','連續天總額%(+)','收盤價']
-match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False)
+match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False ,ignore_index = True)
+
+
+### plot Rep_Stock_Exchange for line 
+## code , con_days%
+plot_Rep_Stock_Exchange(match_row.iloc[:,[0,10]])
+
+
+
 
 ### adding nenagive vlues to red
 for  idx in [4,8,10,11,12] :
