@@ -37,8 +37,8 @@ mail_time = "18:00:00"
 date_sii = datetime.date.today().strftime('%Y%m%d')
 date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
 
-#date_sii='20230418'
-#date_otc='112/04/18'
+#date_sii='20230420'
+#date_otc='112/04/20'
 
 match_row = pd.DataFrame()
 
@@ -130,6 +130,11 @@ def read_mongo_db(_db,_collection,dicct,_columns):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
     return collection.find(dicct,_columns)
+
+def delete_many_mongo_db(_db,_collection,dicct):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    collection.delete_many(dicct)
 
 
 
@@ -349,13 +354,23 @@ for idx in records.columns :
     records[idx] = records[idx].astype('str')
 
 
-records =records.to_dict(orient='records')
+### check data exist in mongo  
+db_records = read_mongo_db('stock','Rep_3_Investors',{"last_modify":date_sii},{"_id":0})
+db_records_df =  pd.DataFrame(list(db_records))
+### compare dataframe db data  and web data  avoid duplicate data  
+chk = records.equals(db_records_df)
+if chk == False :
 
-insert_many_mongo_db('stock','Rep_3_Investors',records)
+   dicct = {"last_modify":date_sii}
+   delete_many_mongo_db('stock','Rep_3_Investors',dicct)
 
-
+   records =records.to_dict(orient='records')
+   insert_many_mongo_db('stock','Rep_3_Investors',records)
 
 time.sleep(1)
+
+#records =records.to_dict(orient='records')
+#insert_many_mongo_db('stock','Rep_3_Investors',records)
 
 ### sync local mongo & redis data of com_list
 
@@ -364,8 +379,9 @@ def cal_con_days(_db,_collection):
                                                                                                                                                             
     set_date=[]                                                                                                                                                 
     cal_day =1                                                                                                                                                  
-                                                                                                                                                                
-    dictt_30day = [ {"$group": { "_id" : { "$toInt": "$last_modify" } }} , {"$sort" : {"_id" :-1}} , {"$limit" :30}]                                            
+    limit_day = 60     
+                                                                                                                                                            
+    dictt_30day = [ {"$group": { "_id" : { "$toInt": "$last_modify" } }} , {"$sort" : {"_id" :-1}} , {"$limit" : limit_day}]                                            
     mydoc_30day = read_aggregate_mongo_db(_db,_collection,dictt_30day)                                                                                
                                                                                                                                                                 
     ### get 30 day date in mongo data                                                                                                                                                            
@@ -509,7 +525,7 @@ def plot_Rep_3_Investors_price(match_row) :
 
 
    ### data to int for plot  
-   records = dfs.astype('int64')
+   records = dfs.fillna(0).astype('int64')
 
    ### 5 rows for each paint  
    for idx in range(0,len(records.columns),5):
@@ -539,10 +555,10 @@ match_row =pd.merge( pd.merge(match_row,df_auth_stock,on = ['code'],how='left'),
 
 match_row['1day%'] = round(round(match_row['total']/match_row['auth_stock'],4)*100 ,2)
 match_row['con_days%'] = round(round(match_row['total_values']/match_row['auth_stock'],4)*100 ,2)
-match_row = match_row.sort_values(by=['con_days%'],ascending = False)
+match_row = match_row.sort_values(by=['con_days%'],ascending = False ,ignore_index = True)
 
 ### select column
-match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,11,10,12]]  
+match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,11,10,12]].fillna(0)  
 #code 公司簡稱 法人  投信 自營商 total  收盤價 漲跌(+/-)  total_values  auth_stock con_days 1day% con_days%
 
 ### plot Rep_3_Investors_price for line 
@@ -572,7 +588,8 @@ for  idx in range(2,11,1) :
 
 ####match_row=Rep_3_Investors(url_list)
 
-if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
+#if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
+if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and chk == False :
 
     if not match_row.empty :
        body = match_row.to_html(escape=False)
