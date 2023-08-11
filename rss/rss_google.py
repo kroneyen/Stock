@@ -83,7 +83,7 @@ def root_data(item):
   
    return ([title,link,pubDate,pubTime,source])
 
-
+"""
 def reurl_API(link_list):
 
      reurl_link_list = []
@@ -109,6 +109,63 @@ def reurl_API(link_list):
        time.sleep(round(random.uniform(0.5, 1.0), 10))
 
      return reurl_link_list
+"""
+
+
+def reurl_API(link_list,_key):
+
+     reurl_link_list = []
+     reurl_api_key = "".join(get_redis_data('short_url_key','hget',_key,'NULL'))  ## list_to_str
+
+
+     if _key  ==  "reurl_key" :
+
+
+        s_reurl = 'https://api.reurl.cc/shorten'
+        s_header = {"Content-Type": "application/json" , "reurl-api-key": reurl_api_key}
+
+        for link in link_list :
+            s_data = {"url": link}
+
+
+            r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
+
+            try :
+                rerul_link = r["short_url"]
+            except :
+                rerul_link = link
+
+            reurl_link_list.append(rerul_link)
+
+
+            time.sleep(round(random.uniform(0.5, 1.0), 20))
+
+
+     elif   _key  ==  "ssur_key" :
+
+
+        for link in link_list :
+
+            s_reurl = 'https://ssur.cc/api.php?'
+            s_data = {"format": "json" , "appkey": reurl_api_key ,"longurl" : link}
+
+            r = requests.post(s_reurl, data= s_data  ).json()
+
+            try :
+                  rerul_link = r["ae_url"]
+            except :
+                  rerul_link = link
+
+            reurl_link_list.append(rerul_link)
+
+
+            time.sleep(round(random.uniform(0.5, 1.0), 20))
+
+
+     return reurl_link_list
+
+
+
 
 
 
@@ -178,7 +235,7 @@ def atlas_read_mongo_db(_db,_collection,dicct,_columns):
 
 
 
-def rss_get(com_list_name,web_list):
+def rss_get(com_list_name,web_list,exclude_tag):
 
 
     dfs = pd.DataFrame()
@@ -198,11 +255,23 @@ def rss_get(com_list_name,web_list):
       df = pd.DataFrame(data=datas, columns=['title', 'link', 'pubDate','pubTime', 's_url'])
       dfs = pd.concat([dfs,df])
       time.sleep(random.randrange(1, 3, 1))
-
     ### filter duplicates news of titile 
-    dfs_uni = dfs.drop_duplicates(subset='title').copy()    
-    match_row =  dfs_uni[dfs_uni['s_url'].isin(web_list)].copy() ## mapping  news  web_list
-    match_row['URL'] = reurl_API(match_row['link'].values) ## shot url
+    dfs_uni =dfs[dfs['s_url'].isin(web_list)].copy()
+    dfs_uni_titile = dfs_uni.drop_duplicates(subset='title').copy()
+    
+    for idx in exclude_tag :
+
+      p = re.compile(fr'\w{idx}*'  )
+      p1 = re.compile(fr'\b{idx}*')
+
+      dfs_uni_titile['title_None'] = dfs_uni_titile.apply(lambda  x: None  if  p.findall(x['title'])  else None if p1.findall(x['title']) else 1   ,axis=1)
+      dfs_uni_titile = dfs_uni_titile.dropna()     
+
+    match_row = dfs_uni_titile.iloc[:,[0,1,2,3,4]].copy()   
+  
+    #match_row = dfs_uni_titile[~dfs_uni_titile['title'].isin(exclude_tag)].copy()
+
+    match_row['URL'] = reurl_API(match_row['link'].values , 'reurl_key') ## short url
     rediskeys = match_row.iloc[0,2] + '_reurl_lists'
     ### delete old redis key
     delete_redis_data(today)
@@ -219,8 +288,10 @@ def rss_get(com_list_name,web_list):
     #return match_row.sort_values(by=['pubDate'])
 
 com_list = []
-
-### get com_list code from redis data 
+extra_tag=[]
+exclude_tag=[]
+web_list=[]
+## get com_list code from redis data 
 redis_com_list = get_redis_data('com_list','lrange',0,-1)
 
 try :
@@ -229,38 +300,43 @@ try :
   dictt = {}
   _columns= {"code":1,"_id":0}
   _tag_columns= {"tag":1,"_id":0}
+  _url_columns= {"url":1,"_id":0}
+
 
   mydoc = atlas_read_mongo_db('stock','com_list',dictt,_columns)
   mydoc_tag = atlas_read_mongo_db('stock','extra_tag',dictt,_tag_columns)
+  time.sleep(round(random.uniform(0.5, 1.0), 10))
+
+  mydoc_exclude_tag = atlas_read_mongo_db('stock','exclude_tag',dictt,_tag_columns)
+  mydoc_web_url = atlas_read_mongo_db('stock','web_url',dictt,_url_columns)
+  time.sleep(round(random.uniform(0.5, 1.0), 10))
+
 
   for idx in mydoc :
-    #atlas_com_list.append(idx.get('code'))
     com_list.append(idx.get('code'))
   for idx in mydoc_tag :
-    #atlas_com_list.append(idx.get('code'))
     extra_tag.append(idx.get('tag'))
+  for idx in mydoc_exclude_tag :
+    exclude_tag.append(idx.get('tag'))  
+  for idx in  mydoc_web_url:
+    web_list.append(idx.get('url'))
 
 
-  
   ### compare redis com_list code from mongo sync to redis data 
-
   if (collections.Counter(com_list) != collections.Counter(redis_com_list)) and (len(com_list) > 0) :
      insert_com_list_redis_data('com_list',com_list)
      
      for com in com_list :
        _values = { 'code' : com ,'last_modify':datetime.datetime.now() }
        insert_mongo_db('stock','com_list',_values)
-
 except :
    ### got redis data from local
    ## get com_list code 
    com_list = redis_com_list
 
 
-
 #com_list = get_redis_data('com_list','lrange',0,-1)
 com_list_name = []
-extra_tag=[]
 
 
 ## get mapping com_list_name
@@ -272,19 +348,55 @@ for com in com_list :
 #extra_tag=['晶圓','特斯拉','財報','蘋果','Facebook','FB','Meta','谷歌','離岸風電','電動車','被動元件','車用晶片','AMD','Nvida','Apple','Mac','Mini LED','MicroLED','Google','自動駕駛','充電站','元宇宙','Omicron','國際油價','Peloton','健身器材','道瓊','ASML','Applied Materials','應材','MLCC','AR／VR','停工','烏克蘭','俄烏','低軌衛星','Starlink','SpaceX','infineon','英飛凌']
 
 
-ignore_tag=['臉書']
+try:
+    com_list_name.remove('世界')  ## remove '世界'
+except :
+    pass
 
-com_list_name.extend(extra_tag)
+com_list_name.extend(extra_tag) ## adding '世界先進'
+
+
+
 
 #print('com_list_name:',com_list_name)
 ## discard url list
 discard_list =['www.cool3c.com','wantrich.chinatimes.com','finance.sina.com.cn','news.sina.com.tw','news.cheshi.com','www.eprice.com.tw','m.eprice.com.tw','www.cnbeta.com']
 ## mapping web
-web_list = ['www.cnyes.com','news.cnyes.com','www.moneydj.com','fund.megabank.com.tw','money.udn.com','www.cw.com.tw','www.ettoday.net','tw.stock.yahoo.com','ctee.com.tw','news.pchome.com.tw','news.ltn.com.tw','cn.wsj.com']
+web_list = ['www.cnyes.com','news.cnyes.com','www.moneydj.com','fund.megabank.com.tw','money.udn.com','www.cw.com.tw','www.ettoday.net','tw.stock.yahoo.com','ctee.com.tw','news.pchome.com.tw','ce.ltn.com.tw','cn.wsj.com','udn.com','finance.ettoday.net']
 #web_list = ['www.cnyes.com','news.cnyes.com','www.moneydj.com','fund.megabank.com.tw','money.udn.com','www.cw.com.tw','www.ettoday.net','tw.stock.yahoo.com','ctee.com.tw','www.chinatimes.com','news.pchome.com.tw','news.ltn.com.tw']
 
-#match_row = rss_get(com_list_name,discard_list)
-match_row = rss_get(com_list_name,web_list)
+
+#exclude_tag=list(mydoc_exclude_tag)
+#print('com_list_name:',com_list_name)
+
+
+#### get function 
+match_row =pd.DataFrame()  ### is empty() 
+#exclude_tag=list(mydoc_exclude_tag)
+
+#print(exclude_tag)
+try :
+    match_row = rss_get(com_list_name,web_list,exclude_tag)
+    #match_row = rss_get(com_list_name,web_list)
+    ## choice column for line nofity 
+    match_row = match_row.iloc[:,[3,0,5]] ## pub_Time/title/URL
+    """
+    ### filter exclude with tag 世界 盤中速報
+    for idx in exclude_tag :
+       #idx = idxs.get('tag')
+       print('idx:',idx)      
+       p = re.compile(fr'\b{idx}*') ## 
+       p1 = re.compile(fr'\w{idx}*') ##unicode
+         
+       match_row['title_exclude_tag'] = match_row.apply(lambda  x: None  if  p.findall(x['title'])  else None if p1.findall(x['title']) else 1   ,axis=1)
+       match_row.dropna()
+    match_row = match_row.iloc[:,[0,1,2]]
+    """
+
+except : 
+       #match_row =pd.DataFrame()  ### is empty()       
+       pass
+
 """
 鉅亨網
 https://www.cnyes.com/
@@ -298,12 +410,14 @@ https://fund.megabank.com.tw/
 
 經濟日報
 https://money.udn.com/
+https://udn.com/news
 
 財經 - 天下雜誌
 https://www.cw.com.tw/
 
 ET today
 https://www.ettoday.net/
+https://finance.ettoday.net/news
 
 yahoo 
 https://tw.stock.yahoo.com/
@@ -319,14 +433,13 @@ https://news.pchome.com.tw/
 
 自由時報
 https://news.ltn.com.tw/
+https://ce.ltn.com.tw/
+
 
 華爾街日報
 https://cn.wsj.com/zh-hant
 """
-
-## choice column for line nofity 
-match_row = match_row.iloc[:,[3,0,5]] ## pub_Time/title/URL
-
+#print('match_row:',match_row)
 
 #if not match_row.empty and  time.strftime("%H:%M:%S", time.localtime()) < notify_time :
 if not match_row.empty  :
