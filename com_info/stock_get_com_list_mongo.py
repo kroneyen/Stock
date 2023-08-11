@@ -7,8 +7,9 @@ import time
 from bs4 import BeautifulSoup
 from datetime import datetime
 import redis
-from pymongo import MongoClient
+from pymongo import MongoClient ,IndexModel
 import random
+from fake_useragent import UserAgent
 
 
 pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
@@ -66,6 +67,19 @@ def drop_mongo_db(_conn,_db,_collection):
     collection.drop()
 
 
+def createIndex_mongo_db(_conn,_db,_collection,_values):
+    if _conn == 'c' :
+      db = c[_db] ## database
+    elif _conn == 'conn':
+      db = conn[_db] ## database
+
+    collection = db[_collection] ## collection 
+    collection.create_indexes([_values])
+
+
+
+
+
 
 def read_mongo_db(_db,_collection,dicct,_columns):
     db = c[_db] ## database
@@ -105,9 +119,10 @@ def llist(df_len):
 #####  get com list for monthly refresh 
 def Get_Com_List_v1(rows) :
 
-  headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+  #headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
   ###https://data.gov.tw/dataset/18419 上市
   ###https://data.gov.tw/dataset/25036 上櫃
+
   sii = 'https://quality.data.gov.tw/dq_download_json.php?nid=18419&md5_url=9791ec942cbcb925635aa5612ae95588'  ## 下載上市清單  
   otc = 'https://quality.data.gov.tw/dq_download_json.php?nid=25036&md5_url=1aae8254db1d14b0d113dd93f2265d06'  ## 下載上櫃清單
 
@@ -143,8 +158,10 @@ def get_com_auth_stock() :
          ,'firstin':1
          ,'TYPEK': type
          ,'code': '' }  ## default is all
+   
+   user_agent = UserAgent()
 
-   r = requests.post(url,data=payload)
+   r = requests.post(url, headers={ 'user-agent': user_agent.random },data=payload)
    r.encoding = 'utf8'
    df = pd.read_html(r.text,thousands=',')[0]
    df = df.iloc[:,[0,2,17]]
@@ -180,6 +197,7 @@ com_lists = get_com_auth_stock()
 
 drop_mongo_db('c','stock','com_lists')
 drop_mongo_db('conn','stock','com_lists')
+time.sleep(random.randrange(1, 3, 1))
 
 #auth_stock_count = 0 
 
@@ -192,9 +210,19 @@ for index in range(len(com_lists)) :
    #_values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'type' : str(com_lists.iloc[index,2]),'last_modify':datetime.now() }
    _values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'auth_stock' : str(com_lists.iloc[index,2]),'type' : str(com_lists.iloc[index,3]),'last_modify':datetime.now() }
    
+   _index= IndexModel([('code',1),('type',1)],name='code_type' , unique=True ,background=True )
+   
    insert_mongo_db('c','stock','com_lists',_values)
+  
+   #time.sleep(random.randrange(1, 3, 1))
+
    insert_mongo_db('conn','stock','com_lists',_values)
 
+   #time.sleep(random.randrange(1, 3, 1))
+
+   createIndex_mongo_db('c','stock','com_lists',_index)
+
+   createIndex_mongo_db('conn','stock','com_lists',_index)
 
 """
    auth_stock_count  += 1
