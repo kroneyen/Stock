@@ -23,9 +23,20 @@ pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
 r = redis.StrictRedis(connection_pool=pool)
 
 
-def get_redis_data(_key):
-    _list = r.lrange(_key,'0','-1')
+
+def get_redis_data(_key,_type,_field_1,_field_2):
+
+    if _type == "lrange" :
+       _list = r.lrange(_key,_field_1,_field_2)
+
+    elif _type == "lrange_head" :
+       _list = r.lrange(_key,_field_1,_field_2)
+
+    elif _type == "hget" :
+       _list = r.hget(_key,_field_1)
+
     return _list
+
 
 
 def delete_redis_data(today):
@@ -41,12 +52,12 @@ def delete_redis_data(today):
           
        dd -=1  
      
-
+"""
 def reurl_API(link_list):
      
      reurl_link_list = []
 
-     reurl_api_key = "".join(get_redis_data("reurl_key"))  ## list_to_str
+     reurl_api_key = "".join(get_redis_data("reurl_key",'lrange',0,-1))  ## list_to_str
 
      s_reurl = 'https://api.reurl.cc/shorten'
      s_header = {"Content-Type": "application/json" , "reurl-api-key": reurl_api_key}
@@ -64,15 +75,74 @@ def reurl_API(link_list):
 
        reurl_link_list.append(rerul_link)
 
-
-
-
 #       r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
 #       reurl_link_list.append(r["short_url"])
-       
-       time.sleep(round(random.uniform(0.5, 1.0), 10)) 
+
+       time.sleep(round(random.uniform(0.5, 1.0), 10))
 
      return reurl_link_list
+
+"""
+
+
+
+def reurl_API(link_list,_key):
+
+     reurl_link_list = []
+     reurl_api_key = "".join(get_redis_data('short_url_key','hget',_key,'NULL'))  ## list_to_str
+
+
+     if _key  ==  "reurl_key" :
+
+
+        s_reurl = 'https://api.reurl.cc/shorten'
+        s_header = {"Content-Type": "application/json" , "reurl-api-key": reurl_api_key}
+
+        for link in link_list :
+
+            uurl = link.split('href="')[1].split('">')[0]
+            print('uurl:',uurl)
+            s_data = {"url": uurl}
+            r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
+
+            try :
+                rerul_link = r["short_url"]
+            except :
+                rerul_link = link
+
+            reurl_link_list.append(rerul_link)
+
+
+            time.sleep(round(random.uniform(0.5, 1.0), 20))
+
+
+     elif   _key  ==  "ssur_key" :
+
+
+        for link in link_list :
+
+            uurl = link.split('href="')[1].split('">')[0]
+            print('uurl:',uurl)
+            s_reurl = 'https://ssur.cc/api.php?'
+            s_data = {"format": "json" , "appkey": reurl_api_key ,"longurl" : uurl}
+      
+            r = requests.post(s_reurl, data= s_data  ).json()
+            print()
+            try :
+                  rerul_link = r["ae_url"]
+            except :
+                  rerul_link = link
+
+            reurl_link_list.append(rerul_link)
+
+
+            time.sleep(round(random.uniform(0.5, 1.0), 20))
+
+
+     return reurl_link_list
+
+
+
 
 
 def insert_redis_data(_key,_values):
@@ -159,6 +229,7 @@ def  hot_new_key_wd(url,today):
         
        skey_list.append(SKEY.replace("'","")) 
        link_list.append(llink) 
+       #link_list.append(llink.split('href="')[1].split('">')[0]) 
 
 
      ###['公司代號', '公司簡稱', '發言日期', '發言時間', '主旨', 'Unnamed: 5']
@@ -168,8 +239,8 @@ def  hot_new_key_wd(url,today):
    
      ###  merge link
      df['URL_All'] = link_list
-
-     key_wd_lists = get_redis_data("key_wd_lists")
+      
+     key_wd_lists = get_redis_data("key_wd_lists","lrange",0,-1)
      
      ### mapping key_wd
      df['key_wd'] = df['主旨'].apply(lambda x: 1 if func(x,key_wd_lists) else 0)
@@ -188,27 +259,36 @@ def  hot_new_key_wd(url,today):
  
        #insert_redis_data('skey_lists',match_row['skey_lists'].values) 
        line_display_list = insert_redis_data(rediskeys,match_row['skey_lists'].values)     
-
+       line_key_list=[]
        #line_key = get_redis_data("line_key") 
-       line_key_list = get_redis_data("line_key") 
+       #line_key_list = get_redis_data("line_key","lrange",0,-1) 
+       line_key_list.append( get_redis_data('line_key_hset','hget','Stock_YoY','NULL'))  ## use signle line key
        ## check new array 
 
        match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)].copy() ### new arrary
        ##short url 
-       match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values)
+       match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values , 'reurl_key')
+       #match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values , 'ssur_key') -- bug
+       
+       #match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values )
 
        match_row_line_notify = match_row_line.iloc[:,[0,1,3,4,8]]  ## for line notify
        match_row_line_notify = match_row_line_notify.astype({'公司代號':int})  ##fix dtype folat to int64
-     
+       match_row_line_notify.columns = ['代號','簡稱','發言時間','主旨','URL']
+  
        ## check new array
        if not match_row_line.empty:
           
           for match_row_index in range(0,len(match_row_line),5) :
+          
               ### for line notify msg 1000  character limit 
-              msg = match_row_line_notify.iloc[match_row_index:match_row_index+5,:].to_string(index = False)   
+              msg = "\n " + match_row_line_notify.iloc[match_row_index:match_row_index+5,:].to_string(index = False)   
               ### for multiple line group
-              for line_key in  range(len(line_key_list)-1) : ## Stock_YoY[0]/Stock[1]
-                  send_line_notify(line_key_list[line_key],msg)
+              #for line_key in  range(len(line_key_list)-3) : ## Stock_YoY[0]/Stock[1]/rss_google[2]
+              #for line_key in  range(len(line_key_list)) : 
+                  #send_line_notify(line_key_list[line_key],msg) 
+              for line_key in  line_key_list : ##
+                  send_line_notify(line_key, msg)   
                   time.sleep(random.randrange(1, 3, 1))
                   #time.sleep(round(random.uniform(0.5, 1.0), 10))
 
