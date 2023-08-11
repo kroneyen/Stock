@@ -32,8 +32,8 @@ date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.da
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20230407'
-#date_otc= '112/04/07'
+#date_sii= '20230509'
+#date_otc= '112/05/09'
 
 #mail_time = '09:00:00'
 mail_time = '18:00:00'
@@ -136,24 +136,16 @@ conn = MongoClient(mongourl)
 
 
 
-
-
 def atlas_read_mongo_db(_db,_collection,dicct,_columns):
     db = conn[_db] ## database
     collection = db[_collection] ## collection 
     return collection.find(dicct,_columns)
 
 
-
- #set_date = str(idx_date)
- return str(idx_date)
-
 def read_aggregate_mongo_db(_db,_collection,dicct):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
     return collection.aggregate(dicct)
-
-
 
 
 
@@ -421,7 +413,9 @@ def cal_con_days(_db,_collection):
     set_date=[]                                                                                                                                                 
     cal_day =1                                                                                                                                                  
                                                                                                                                                                 
-    dictt_30day = [  {"$group": { "_id" : { "$toInt": "$last_modify" }, "sum_coun" : { "$sum" :1} }} , {"$sort" : {"_id" :-1}} , {"$limit" :30},{"$match" : { "_id" : {"$ne": None }}}  	]
+    limit_day = 60
+
+    dictt_30day = [  {"$group": { "_id" : { "$toInt": "$last_modify" }, "sum_coun" : { "$sum" :1} }} , {"$sort" : {"_id" :-1}} , {"$limit" : limit_day},{"$match" : { "_id" : {"$ne": None }}}  	]
                                           
     mydoc_30day = read_aggregate_mongo_db(_db,_collection,dictt_30day)  
 
@@ -538,7 +532,7 @@ def plot_Rep_Stock_Exchange(match_row) :
 
 
    ### data to int for plot  
-   records = dfs.astype('int64')
+   records = dfs.fillna(0).astype('int64')
 
    ### 5 rows for each paint  
    for idx in range(0,len(records.columns),5):
