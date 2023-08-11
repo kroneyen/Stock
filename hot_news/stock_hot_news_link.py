@@ -12,6 +12,15 @@ import send_mail
 import redis
 import line_notify
 import requests
+from fake_useragent import UserAgent
+import del_png
+
+
+### del images/*.png
+del_png.del_images()
+
+
+
 
 
 
@@ -20,8 +29,10 @@ url ='https://mops.twse.com.tw/mops/web/t05sr01_1'
 ##new_windwos =https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1
 #&SEQ_NO=1&SPOKE_TIME=145909&SPOKE_DATE=20210331&COMPANY_ID=6173&skey=6173202103311&firstin=true
 today_week = datetime.date.today().strftime("%w")
-mail_time = "21:00:00"
+#mail_time = "21:00:00"
+mail_time = "12:00:00"
 today = datetime.date.today()
+#today = datetime.date.today()+datetime.timedelta(days =-1)
 
 def get_redis_data(_key):
     import redis
@@ -38,8 +49,10 @@ def  hot_new_detail(url,today):
      pd.options.display.max_rows
      pd.options.display.max_columns
      pd.options.display.max_colwidth=200
+
+     user_agent = UserAgent()
     
-     r = requests.post(url)
+     r = requests.post(url,  headers={ 'user-agent': user_agent.random })
      r.encoding = 'utf8'    
 
      soup = BeautifulSoup(r.text, 'html.parser')
@@ -94,13 +107,14 @@ def  hot_new_detail(url,today):
      com_lists = get_redis_data("com_list")  
      match_row=df[df['公司代號'].isin(com_lists)]
     
-     return match_row
+     return match_row.sort_values(by=['發言時間'],ascending = False ,ignore_index = True)
 
 match_row = hot_new_detail(url,today)
 
+
 if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
     #match_row.to_html('hot_news_link.log')
-    if len(match_row) > 0 :
+    if not match_row.empty :
        body = match_row.to_html(escape=False)
        #log_date = datetime.date.today().strftime("%Y-%m-%d")
        send_mail.send_email('stock_hot_news_link_%s' % today ,body)
