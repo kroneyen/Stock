@@ -88,10 +88,10 @@ def read_mongo_db(_db,_collection,dicct,_columns):
 
 
 
-def stock_season_report(year, season, yoy_up,yoy_low):
-    pd.options.display.max_rows = 3000
-    pd.options.display.max_columns 
-    pd.options.display.max_colwidth = 200 
+def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
+    #pd.options.display.max_rows = 3000
+    #pd.options.display.max_columns 
+    #pd.options.display.max_colwidth = 200 
 
     user_agent = UserAgent()
 
@@ -124,21 +124,19 @@ def stock_season_report(year, season, yoy_up,yoy_low):
        df_f = pd.concat([df_f,dfs],ignore_index=True) ###合併
 
        time.sleep(1)
-
+    """
     ### get atlas mongodb data 
     mydoc = atlas_read_mongo_db("stock","com_list",{},{"_id":0,"code":1})
     com_lists = []
     for idx in mydoc :
      com_lists.append(idx.get('code'))
-
+    """
 
     df_f[0]= df_f[0].astype('str')
     ### filter com_lists data
     df_f =df_f[df_f[0].isin(com_lists)]
-    #print('2sec_url:',url , 'df_info:',df.info())
     df_f = df_f.sort_values(by=[2],ascending = False,ignore_index = True) ## 排序
     sst = "Q%s累計盈餘" %(season)
-    #df_f.columns = ['公司代號', '公司簡稱','基本每股盈餘（元）' ]  ##定義欄位
     df_f.columns = ['公司代號', '公司名稱',sst ]  ##定義欄位
     return df_f
 
@@ -174,25 +172,44 @@ else :
       last_yy = today.year -1
 
 
+#### get com_lists
+
+try :
+
+  ### got mongo data from atlas
+  dictt = {}
+  _columns= {"code":1,"_id":0}
+  com_lists = []
+
+  mydoc = atlas_read_mongo_db('stock','com_list',dictt,_columns)
+
+  for idx in mydoc :
+    com_lists.append(idx.get('code'))
+
+except :
+   ### got redis data from local
+   com_lists = get_redis_data("com_list","lrange",0,-1) ## get  redis data
+
+
 
 
 try :
 
-        last_year = stock_season_report( last_yy ,season ,'undefined','undefined')  ## last year season
+        last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
 
         time.sleep(1)
 
-        the_year = stock_season_report(yy ,season,'undefined','undefined')  ## the year season
+        the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
 
 except :
         
          
         ### if no data  get last season
-        last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined')  ## last year season
+        last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined',com_lists)  ## last year season
 
         time.sleep(1)
 
-        the_year = stock_season_report( yy ,season -1 ,'undefined','undefined')  ## the year season
+        the_year = stock_season_report( yy ,season -1 ,'undefined','undefined',com_lists)  ## the year season
  
 
 
@@ -215,20 +232,21 @@ records.columns =['code','code_name','the_year','last_year','EPS_g%','season','y
 records = records.astype({'season':'string','years':'string'})
 
 #records = records.to_dict(orient='records')
-dicct={"season" : str(season), "years" : str(yy)}
+dicct={"season" : str(season), "years" : str(yy),"code" :  {"$in" : com_lists}}
 
 ### check data is exist on  mongo 
-db_records = read_mongo_db('stock','Rep_Stock_Season',{"season" : str(season),"years" : str(yy)},{"_id":0})
+#db_records = read_mongo_db('stock','Rep_Stock_Season_Com',{"season" : str(season),"years" : str(yy)},{"_id":0})
+db_records = read_mongo_db('stock','Rep_Stock_Season_Com',dicct,{"_id":0})
 db_records_df =  pd.DataFrame(list(db_records))
 
 chk = records.equals(db_records_df)
 if chk == False :
 
-   dicct = {"season" : str(season),"years" : str(yy)}
-   delete_many_mongo_db('stock','Rep_Stock_Season',dicct)
+   dicct = {"season" : str(season),"years" : str(yy),"code" :  {"$in" : com_lists}}
+   delete_many_mongo_db('stock','Rep_Stock_Season_Com',dicct)
 
    records =records.to_dict(orient='records')
-   insert_many_mongo_db('stock','Rep_Stock_Season',records)
+   insert_many_mongo_db('stock','Rep_Stock_Season_Com',records)
 time.sleep(1)
 
 
