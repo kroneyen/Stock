@@ -16,7 +16,7 @@ import del_png
 ### del images/*.png
 del_png.del_images()
 
-
+user_agent = UserAgent()
 
 mail_time = "09:00:00"
 #mail_time = "21:00:00"
@@ -110,7 +110,7 @@ def get_mongo_last_date():
 
  ### mongo dict data
 
- set_doc =  read_aggregate_mongo_db('stock','Rep_Stock_Exchange',dictt_set)
+ set_doc =  read_aggregate_mongo_db('stock','Rep_3_Investors',dictt_set)
 
  ### for lists  get cal date 
  for idx in set_doc:
@@ -135,7 +135,6 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
      
     df_f = pd.DataFrame()
 
-    user_agent = UserAgent()
 
     #u_index = 0
     for url in url_list : 
@@ -172,16 +171,75 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     return df_f
 
 
+
+def Rep_price(date_sii,date_otc,com_lists):
+
+       url_sii = 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=' + date_sii + '&type=ALL'
+       #https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=20210910&type=ALL
+
+       url_otc = 'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=' + date_otc +'&o=htm&s=0,asc,0'
+       #https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=110/09/10&o=htm&s=0,asc,0
+
+       url_list = [url_sii,url_otc]
+
+       u_index = 0
+       dfs = pd.DataFrame()
+       for url in url_list :
+              r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
+              r.encoding = 'utf8'
+              if u_index == 0 :
+                df = pd.read_html(r.text,thousands=",")[8] ## []list to pandas
+              else :
+                df = pd.read_html(r.text,thousands=",")[0] ## []list to pandas
+
+              df_len = len(df.columns)
+              df.columns= llist(len(df.columns)) ##編列columns
+              df = df[df[0].isin(com_lists)] ##比對
+
+              #### 0,1,2,3/*sii(證券代號        證券名稱 收盤價 漲跌(+/-)       漲跌價差)*/ 
+              if u_index == 0 :
+                df[16] = df[9] + df[10].astype(str) ##合併 (漲跌(+/-)   漲跌價差)
+                df = df.iloc[:,[0,1,8,16]] ## 取的欄位 
+                df.columns= llist(len(df.columns))
+
+
+              #### 0,1,2,3/*otc代號     名稱    收盤    漲跌*/
+              else :
+
+                df = df.iloc[:,[0,1,2,3]] ##代號        名稱    收盤    漲跌
+                df.columns= llist(len(df.columns)) ## define new column array
+
+              ##df = df[df[0].isin(com_lists)] ##比對
+
+              dfs = pd.concat([dfs,df],ignore_index=True) ##合併
+              #dfs[3] = df[3].fillna(0)
+
+              time.sleep(1)
+              u_index += 1
+              #print(df.info())
+       dfs = dfs.fillna(0)
+       #dfs.columns = ['公司代號', '證券名稱', '收盤價', '漲跌(+/-)']
+       #dfs = dfs.iloc[:,[0,1,2,16]]
+       dfs = dfs.iloc[:,[0,2]]
+       dfs.iloc[:,1] = dfs.iloc[:,1].apply(lambda  x: None  if x =='--' else None if x=='---' else float(x))
+       dfs.columns = ['code', 'price']
+       dfs = dfs.astype({dfs.columns[1]:'float'})
+
+       return dfs.dropna()
+
+
+
+
 ###  5/15,8/14,11/14,3/31
 
 today = datetime.date.today()
 
-if today.month > 4 and today.month<= 6 :
+if today.month >= 4 and today.month<= 6 :
   season = 1
-elif  today.month > 7 and today.month<= 9 :
+elif  today.month >= 7 and today.month<= 9 :
   season = 2 
 
-elif  today.month > 10 and today.month<= 12 :
+elif  today.month >= 10 and today.month<= 12 :
   season = 3
 else :
   season = 4 
@@ -189,7 +247,7 @@ else :
 
 s_df = pd.DataFrame()
 
-
+"""
 #### Q4 of years  
 if season == 4 :
      yy = today.year -1
@@ -198,6 +256,12 @@ else :
 ### last season replort
       yy = today.year
       last_yy = today.year -1
+"""
+
+### last season replort
+yy = today.year
+last_yy = today.year -1
+
 
 
 
@@ -316,29 +380,43 @@ else :
 
 
 
-
 ### get last price
 last_modify=get_mongo_last_date()
+
+
+""" fix cat get price bug 
 last_price = read_mongo_db('stock','Rep_Stock_Exchange',{"last_modify":last_modify},{"code":1,"price":1,"_id":0})
 mydoc = pd.DataFrame(list(last_price))
 mydoc = mydoc.astype({mydoc.columns[1]:'float'})
+"""
 
+date_sii = last_modify
+date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('%Y')) - 1911)  + datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('/%m/%d')
+
+mydoc = Rep_price(date_sii,date_otc,com_lists)
 
 match_row.rename(columns={'公司代號': 'code'}, inplace=True)
 
 match_row_doc = pd.merge(match_row,mydoc, on =['code']) ##dataframe join by column
+match_row_doc.dropna()
+
 
 #print(match_row_doc.info())
 match_row_doc = match_row_doc.astype({match_row_doc.columns[2]:'float',match_row_doc.columns[5]:'float'})
 
-match_row_doc['earn_yield']= round(round(match_row_doc.iloc[:,2]/match_row_doc['price'],4)*100 ,2)
-#print(match_row_doc)
+### 70% Dividend for earn_yield
+div_per = 0.7
+match_row_doc['earn_yield']= round(round((match_row_doc.iloc[:,2]/match_row_doc['price']*0.7),4)*100 ,2)
+match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],4),2)
+## PE & earn_yield filter
+#match_row=match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['earn_yield']>0)] .copy()
+match_row = match_row_doc.copy()
+match_row=match_row.sort_values(by=['PE'],ascending = True,ignore_index = True)
 
-match_row=match_row_doc.copy()
-match_row=match_row.sort_values(by=['earn_yield'],ascending = False,ignore_index = True)
 
-for idx in list(range(2,7)) :
-    if idx == 4 or idx == 6 :
+
+for idx in list(range(2,8)) :
+    if idx == 4 or idx == 6 or  idx == 7:       
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
     else : 
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
@@ -353,7 +431,7 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        
        #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = today.year ,season=season) ,body)
        to_date = datetime.date.today().strftime("%Y%m%d")
-       send_mail.send_email('Stock_Eps_Earnning_Yield_{today}'.format(today=to_date),body)
+       send_mail.send_email('Stock_Eps_Yield_PE_{today}'.format(today=to_date),body)
 else :
     #print(match_row.to_string(index=False))
     #print(match_row.to_html(escape=False))

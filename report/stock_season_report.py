@@ -146,12 +146,12 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 today = datetime.date.today()
 #today = datetime.datetime.strptime('20221101', '%Y%m%d')
 
-if today.month > 4 and today.month<= 6 :
+if today.month >= 4 and today.month<= 6 :
   season = 1
-elif  today.month > 7 and today.month<= 9 :
+elif  today.month >= 7 and today.month<= 9 :
   season = 2 
 
-elif  today.month > 10 and today.month<= 12 :
+elif  today.month >= 10 and today.month<= 12 :
   season = 3
 else :
   season = 4 
@@ -161,7 +161,7 @@ else :
 
 s_df = pd.DataFrame()
 
-
+"""
 ###  season cal 
 if season == 4  :
      yy = today.year -1
@@ -170,7 +170,11 @@ else :
 ### last season replort
       yy = today.year
       last_yy = today.year -1
+"""
 
+
+yy = today.year
+last_yy = today.year -1
 
 #### get com_lists
 
@@ -205,6 +209,17 @@ except :
         
          
         ### if no data  get last season
+        if  season == 1   : ## crossover years
+
+                season = 4
+                last_yy  =   today.year -2
+                yy =  today.year -1
+
+        else :
+                 season = season -1
+
+
+
         last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined',com_lists)  ## last year season
 
         time.sleep(1)

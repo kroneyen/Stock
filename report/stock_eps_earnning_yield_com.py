@@ -119,7 +119,7 @@ def get_mongo_last_date():
 
  ### mongo dict data
 
- set_doc =  read_aggregate_mongo_db('stock','Rep_Stock_Exchange',dictt_set)
+ set_doc =  read_aggregate_mongo_db('stock','Rep_3_Investors',dictt_set)
 
  ### for lists  get cal date 
  for idx in set_doc:
@@ -167,8 +167,8 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 
        df_f = pd.concat([df_f,dfs],ignore_index=True) ###合併
 
-
        time.sleep(1)
+
 
     df_f[0]= df_f[0].astype('str')
     ### filter com_lists data
@@ -245,20 +245,21 @@ def Rep_price(date_sii,date_otc,com_lists):
 
 today = datetime.date.today()
 
-if today.month > 4 and today.month<= 6 :
+if today.month >= 4 and today.month<= 6 :
   season = 1
-elif  today.month > 7 and today.month<= 9 :
+elif  today.month >= 7 and today.month<= 9 :
   season = 2 
 
-elif  today.month > 10 and today.month<= 12 :
+elif  today.month >= 10 and today.month<= 12 :
   season = 3
+
 else :
   season = 4 
 
 
 s_df = pd.DataFrame()
 
-
+"""
 #### Q4 of years  
 if season == 4 :
      yy = today.year -1
@@ -267,6 +268,11 @@ else :
 ### last season replort
       yy = today.year
       last_yy = today.year -1
+"""
+
+### last season replort
+yy = today.year
+last_yy = today.year -1
 
 
 
@@ -309,36 +315,38 @@ for idx in mydoc_season :
 mydoc_code_lists.sort()
 com_lists.sort()
 
+
 ### compare mydoc_code_lists & com_lists 
 if not mydoc_code_lists == com_lists :
 
    try :
 
-        #last_year = stock_season_report(today.year -1 ,season ,'undefined','undefined')  ## last year season
         last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
 
         time.sleep(1)
 
-        #the_year = stock_season_report(today.year,season,'undefined','undefined')  ## the year season
         the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
 
+
    except :  ### if no data  get last season
-   	        	         	      
+
           if  season == 1   : ## crossover years
 
-          	season = 4
-          	last_yy  =   today.year -2
-          	yy =  today.year -1
-          	
-          else : 	
+                season = 4
+                last_yy  =   today.year -2
+                yy =  today.year -1
+                
+          else :        
                  season = season -1
-          	
 
+          
           last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
           
           time.sleep(1)
           
           the_year = stock_season_report( yy ,season ,'undefined','undefined',com_lists)  ## the year season 
+
+
 
    #s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
    s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司名稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
@@ -414,18 +422,21 @@ match_row_doc.dropna()
 #print("match_row_doc_info:",match_row_doc.info())
 match_row_doc = match_row_doc.astype({match_row_doc.columns[2]:'float',match_row_doc.columns[5]:'float'})
 
-match_row_doc['earn_yield']= round(round(match_row_doc.iloc[:,2]/match_row_doc['price'],4)*100 ,2)
-#print(match_row_doc)
-
-match_row=match_row_doc.copy()
+### 70% Dividend for earn_yield
+div_per = 0.7 
+match_row_doc['earn_yield']= round(round((match_row_doc.iloc[:,2]/match_row_doc['price']*0.7),4)*100 ,2)
+match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],4),2)
+## PE & earn_yield filter
+match_row=match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['earn_yield']>0)] .copy()
+#match_row=match_row_doc.copy()
 #match_row=match_row.sort_values(by=['earn_yield'],ascending = False,ignore_index = True)
-match_row=match_row.sort_values(by=['earn_yield'],ascending = False,ignore_index = True)
+match_row=match_row.sort_values(by=['PE'],ascending = True,ignore_index = True)
 
 
 
 #match_row = match_row.iloc[:,[0,1,2,3,4,5,7]]
-for idx in list(range(2,7)) :
-    if idx == 4 or idx == 6 :
+for idx in list(range(2,8)) :
+    if idx == 4 or idx == 6 or  idx == 7:
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
     else : 
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
@@ -443,8 +454,9 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = today.year ,season=season) ,body)
        #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = yy ,season=season) ,body)
        to_date = datetime.date.today().strftime("%Y%m%d")
-       send_mail.send_email('Stock_Eps_Earnning_Yield_{today}_com'.format(today=to_date),body)
+       #send_mail.send_email('Stock_Eps_Earnning_Yield_{today}_com'.format(today=to_date),body)
+       send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=to_date),body)
 else :
     #print(match_row.to_string(index=False))
     #print(match_row.to_html(escape=False))
-    print(match_row)
+    print(match_row.head(100))

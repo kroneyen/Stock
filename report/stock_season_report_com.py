@@ -209,9 +209,17 @@ try :
         the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
 
 except :
-        
-         
+
         ### if no data  get last season
+        if  season == 1   : ## crossover years
+
+                season = 4
+                last_yy  =   today.year -2
+                yy =  today.year -1
+
+        else :
+                 season = season -1
+
         last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined',com_lists)  ## last year season
 
         time.sleep(1)
