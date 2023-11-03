@@ -77,6 +77,11 @@ def atlas_drop_mongo_db(_db,_collection):
     collection = db[_collection] ## collection 
     return collection.drop()
 
+def atlas_delete_many_mongo_db(_db,_collection,_dicct):
+    db = conn[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.delete_many(_dicct)
+
 
             
 
@@ -96,32 +101,38 @@ def Check_sys_conn() :
     return _db,_collection,_dicct
 
 
-_db, _collection, _dicct = Check_sys_conn()
 
-## python3.6 Atlas_mongodb_insert.py 'stock' 'Rep_Stock_Exchange' '{"last_modify":{"$gte": "20230101" , "$lt" : "20230330"}}' 
-## python3.6 Atlas_mongodb_insert.py 'stock' 'Rep_Stock_Holder' '{"date":{"$gte": "2023401"}}'
+def data_insert_mongo(_db, _collection, _dicct):
+
+   ## python3.6 Atlas_mongodb_insert.py 'stock' 'Rep_Stock_Exchange' '{"last_modify":{"$gte": "20230101" , "$lt" : "20230330"}}' 
+   ## python3.6 Atlas_mongodb_insert.py 'stock' 'Rep_Stock_Holder' '{"date":{"$gte": "2023401"}}'
+   ## python3.6 Atlas_mongodb_insert.py '591' 'sale_house'  '{"last_modify" : {"$gte": "2023-10-05T00:00:00"}}'
+   _columns = {"_id":0}
+  
+   ### get local mongo  data
+   local_data = read_mongo_db(_db,_collection,_dicct,_columns)
+
+   if local_data.count() > 0 : 
+
+     d_dicct = {}
+
+     ## delete old atlas mongo data  
+     atlas_delete_many_mongo_db(_db,_collection,d_dicct)     
+
+     atlas_insert_many_mongo_db(_db,_collection,local_data)
+      
 
 
-_columns = {"_id":0}
-
-#print(_db,_collection, _dicct, _columns)
-
-local_data = read_mongo_db(_db,_collection,_dicct,_columns)
+if __name__ == '__main__':
 
 
+     try :
 
+         _db, _collection, _dicct = Check_sys_conn()
+         data_insert_mongo(_db, _collection, _dicct)
 
-if local_data.count() > 0 : 
-  ## drop atlas mongo data
-  atlas_drop_mongo_db(_db,_collection)
-  #records = local_data.to_dict(orient:"records")
-  atlas_insert_many_mongo_db(_db,_collection,local_data)
+         print(_db , "insert " + _collection + " data done")
 
-  """
-  for idx in local_data  :
-    #print(idx)
-    atlas_insert_mongo_db(_db,_collection,idx)
-  """  
-  print("insert " + _collection + " data done")
-else : 
-  print("insert " + _collection + " data failed")
+     except : 
+
+         print(_db , "insert " + _collection + " data failed")
