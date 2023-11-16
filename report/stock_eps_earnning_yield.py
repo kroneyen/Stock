@@ -104,9 +104,9 @@ def atlas_read_mongo_db(_db,_collection,dicct,_columns):
     return collection.find(dicct,_columns)
 
 
-def get_mongo_last_date():
+def get_mongo_last_date(cal_day):
  ### mongo query for last ? days
- dictt_set = [ {"$group": { "_id" : { "$toInt" : "$last_modify" } }} , {"$sort" : {"_id" :-1}} , { "$limit" : 1},{"$sort" : {"_id" :1}} , { "$limit" :1}]
+ dictt_set = [ {"$group": { "_id" : { "$toInt" : "$last_modify" } }} , {"$sort" : {"_id" :-1}} , { "$limit" : cal_day},{"$sort" : {"_id" :1}} , { "$limit" :1}]
 
  ### mongo dict data
 
@@ -227,10 +227,64 @@ def Rep_price(date_sii,date_otc,com_lists):
 
        return dfs.dropna()
 
+def plot_Stock_Eps_Yield_PE_Season(season,year,com_lists) :
+
+     dfs = pd.DataFrame()
+     dfs_Investors = pd.DataFrame()
+     last_modify = get_mongo_last_date(30)
+
+
+     for idx in com_lists :
+
+         altas_mydoc_Season = read_mongo_db('stock','Rep_Stock_Season_Com',{'code': idx ,'season': season , "years" : year  },{'_id':0})
+         ### get price
+         altas_mydoc_Investors = read_mongo_db('stock','Rep_3_Investors',{'code': idx ,"last_modify" : {"$gte" : last_modify}},{'_id':0 ,'code':1 ,'price':1 , 'last_modify':1})
+
+
+         df = pd.DataFrame(list(altas_mydoc_Season))
+
+         df_Investors = pd.DataFrame(list(altas_mydoc_Investors))
+
+         if not df.empty :
+
+            tmp_df = pd.DataFrame()
+            rest_the_year_df = df.iloc[:,[0,1,2,5,6]].copy()
+
+            dfs = pd.concat([dfs,rest_the_year_df],axis=0)
+
+            dfs_Investors = pd.concat([dfs_Investors,df_Investors],axis=0)
+
+
+     dfs['x_code']= dfs.apply(lambda x: x['code']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
+     ### drop nan column
+     dfs.dropna(axis='columns')
+     ### merge   
+     df_merge = pd.merge(dfs_Investors,dfs, on = ['code'],how='left')
+
+     df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if pd.notnull(x['price']) else  round(float(x['price']) / float(x['the_year']),2),axis =1  )
+     ### select column 
+     df_merge = df_merge.iloc[:,[1,7,8]]
+     ### povit table 
+     records = df_merge.pivot(index='last_modify', columns='x_code', values='PE')
+
+     for idx in range(0,len(records.columns),5):
+
+          idx_records = records.iloc[ : , idx:idx+5 ]
+
+          ax = idx_records.plot(y = idx_records.columns)
+          ## 顯示數據
+          for line, name in zip(ax.lines, idx_records.columns):
+             y = line.get_ydata()[-1]
+             ax.annotate(name, xy=(1,y), xytext=(4,0), color=line.get_color(),
+                    xycoords = ax.get_yaxis_transform(), textcoords="offset points",
+                    size=10, va="center")
+          plt.show()
+          plt.clf()
+  
 
 
 
-###  5/15,8/14,11/14,3/31
+###5/15,8/14,11/14,3/31
 
 today = datetime.date.today()
 
@@ -381,7 +435,7 @@ else :
 
 
 ### get last price
-last_modify=get_mongo_last_date()
+last_modify=get_mongo_last_date(1)
 
 
 """ fix cat get price bug 
@@ -406,7 +460,7 @@ match_row_doc = match_row_doc.astype({match_row_doc.columns[2]:'float',match_row
 
 ### 70% Dividend for earn_yield
 div_per = 0.7
-match_row_doc['earn_yield']= round(round((match_row_doc.iloc[:,2]/match_row_doc['price']*0.7),4)*100 ,2)
+match_row_doc['earn_yield_70%']= round(round((match_row_doc.iloc[:,2]/match_row_doc['price']*0.7),4)*100 ,2)
 match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],4),2)
 ## PE & earn_yield filter
 #match_row=match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['earn_yield']>0)] .copy()
