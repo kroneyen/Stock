@@ -9,14 +9,26 @@ import line_notify
 from bs4 import BeautifulSoup
 import send_mail
 from pymongo import MongoClient
+from pymongo.errors import BulkWriteError
 from fake_useragent import UserAgent
 import del_png
+from io import StringIO
+from pymongo import MongoClient
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.font_manager import fontManager
+
+
+# 改style要在改font之前
+plt.style.use('seaborn')
+fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
+mpl.rc('font', family='Taipei Sans TC Beta')
+
 
 
 ### del images/*.png
 del_png.del_images()
-
-
 
 
 mail_time = "18:00:00"
@@ -141,6 +153,68 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     return df_f
 
 
+def plot_Rep_Stock_Season(season,year,com_lists) :
+
+      dfs = pd.DataFrame()
+      for idx in com_lists :
+      
+      
+         altas_mydoc = atlas_read_mongo_db('stock','Rep_Stock_Season_Com',{'code': idx ,'season': str(season) , "years" : str(year)  },{'_id':0})
+      
+      
+         df = pd.DataFrame(list(altas_mydoc))
+      
+         if not df.empty :
+           
+           tmp_df = pd.DataFrame()
+           rest_the_year_df = df.iloc[:,[0,1,2,5,6]].copy()
+           rest_last_year_df = df.iloc[:,[0,1,3,5,6]].copy()
+
+           rest_last_year_df.loc[:,'years'] = str(int(rest_last_year_df.iloc[0,4]) - 1)
+           #rest_last_year_df['years'] = str(int(last_years_values)-1)
+           #rest_last_year_df['years'] = rest_the_year_df.apply(lambda x: str(int(x['years'])-1) if pd.notnull(x['years']) else x['years'],axis =1  )
+      
+           #new_last_years = rest_last_year_df.apply(lambda x: str(int(x['years']) -1)  if pd.notnull(x['years']) else str(x['years'] -1),axis =1  )
+           #rest_last_year_df['years'] = new_last_years
+      
+      
+           tmp_df = pd.concat([rest_last_year_df,rest_the_year_df],axis=0)
+                         
+           
+           #print('tmp_df:',tmp_df) 
+            
+           dfs = pd.concat([dfs,tmp_df],axis=0)
+      
+      dfs['EPS_g%']= dfs.apply(lambda x: x['last_year'] if pd.notnull(x['last_year']) else x['the_year'],axis =1  )
+      dfs['x_code']= dfs.apply(lambda x: x['code']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
+      dfs['years_s']= dfs.apply(lambda x: x['years']+'_Q'+ x['season'] if pd.notnull(x['years']) else   x['years']+'_Q'+ x['season'],axis =1  )
+      dfs.dropna(axis='columns' ,inplace=True)
+      
+      records = dfs.iloc[:,[4,5,6]]
+     
+      for idx in range(0,len(records),10):
+      
+         idx_records = records.iloc[idx:idx+10]
+         colors = ['tab:blue', 'tab:orange', 'tab:red', 'tab:green', 'tab:gray'] 
+         idx_records.index = idx_records['x_code']
+         #seaborn 0.11.2 sns.catplot(data=tips, kind="bar", x="day", y="total_bill", hue="smoker") 
+         splot = sns.barplot( data=idx_records, x='x_code', y="EPS_g%", hue='years_s',palette = ['tab:blue', 'tab:orange'])
+         
+         ## 顯示數據
+         for g in splot.patches:
+            splot.annotate(format(g.get_height(), '.2f'),
+                      (g.get_x() + g.get_width() / 2., g.get_height()),
+                      ha = 'center', va = 'center',
+                      xytext = (0, 9),
+                      textcoords = 'offset points')
+      
+         #plt.show()
+         plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
+         ###  clear the figure 
+         plt.clf()
+
+
+
 ###  5/15,8/14,11/14,3/31
 
 today = datetime.date.today()
@@ -231,9 +305,10 @@ except :
 s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司名稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
 
 #### (累計EPS / 去年累計EPS - 1) * 100% 
-s_df['EPS成長%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+#s_df['EPS成長%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+s_df['EPS年增%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]) )/ (s_df.iloc[:,3]) ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
 
-match_row = s_df.sort_values(by=['EPS成長%'],ascending = False,ignore_index = True).copy()
+match_row = s_df.sort_values(by=['EPS年增%'],ascending = False,ignore_index = True).copy()
 
 
 
@@ -262,9 +337,17 @@ if chk == False :
 
    records =records.to_dict(orient='records')
    insert_many_mongo_db('stock','Rep_Stock_Season_Com',records)
-time.sleep(1)
 
+time.sleep(10)
 
+try :
+## bug
+      plot_Rep_Stock_Season(season,yy,com_lists)
+
+except BulkWriteError as e:
+
+       print('plot_Rep_Stock_Season:',e.details)
+        
 
 
 for idx in list(range(2,5)) :
