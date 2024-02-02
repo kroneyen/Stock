@@ -32,8 +32,8 @@ date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.da
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20230509'
-#date_otc= '112/05/09'
+#date_sii= '20231025'
+#date_otc= '112/10/25'
 
 #mail_time = '09:00:00'
 mail_time = '18:00:00'
@@ -539,12 +539,21 @@ def plot_Rep_Stock_Exchange(match_row) :
 
      idx_records = records.iloc[ : , idx:idx+5 ]
 
-     idx_records.plot(y = idx_records.columns)
+     #idx_records.plot(y = idx_records.columns)
+     ax = idx_records.plot(y = idx_records.columns)
      #idx_records.plot.line(y = idx_records.columns, figsize=(10,6))
      #idx_records.plot.bar(y = idx_records.columns, figsize=(10,6))
      ### del png with crontab jobs
-     plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
 
+     ## 顯示公司在尾端
+     for line, name in zip(ax.lines, idx_records.columns):
+          y = line.get_ydata()[-1]
+          ax.annotate(name, xy=(1,y), xytext=(3,0), color=line.get_color(),
+                xycoords = ax.get_yaxis_transform(), textcoords="offset points",
+                size=10, va="center")
+
+     plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
+     plt.clf()
 
 
 ### del images/*.png
@@ -623,7 +632,7 @@ match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False ,
 plot_Rep_Stock_Exchange(match_row.iloc[:,[0,10]])
 
 
-
+match_row['con_days'] = match_row['con_days'].astype('int64')
 
 ### adding nenagive vlues to red
 for  idx in [4,8,10,11,12] :
