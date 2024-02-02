@@ -22,8 +22,8 @@ del_png.del_images()
 
 user_agent = UserAgent()
 
-mail_time = "09:00:00"
-#mail_time = "21:00:00"
+#mail_time = "09:00:00"
+mail_time = "20:00:00"
 
 def color_red(val):
     if val < 0:
@@ -238,6 +238,182 @@ def Rep_price(date_sii,date_otc,com_lists):
 
 
 
+def stock_season_roa_roe(year, season, com_lists):
+
+
+    dfs =  pd.DataFrame()
+    dfs_b =  pd.DataFrame()
+    dfs_a =  pd.DataFrame()
+    df_merge =  pd.DataFrame()
+
+    url_list = ['https://mops.twse.com.tw/mops/web/ajax_t163sb04','https://mops.twse.com.tw/mops/web/ajax_t163sb05']
+
+
+    typek=['sii','otc']
+
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1\
+  0_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5304.107 Safari/537.36'}
+
+    #r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
+    #print('url:',url)
+
+
+    url_idx = 0 ## for 綜合損益表Statement of Comprehensive Income or financials
+    for url in url_list :
+
+      for ty_idx in typek :
+
+       payload = {'encodeURIComponent': 1,
+            'step': 1,
+            'firstin': 1,
+            'off': 1 ,
+            'isQuery': 'Y' ,
+            'TYPEK': ty_idx ,
+            'year': str(year-1911) ,
+            'season': str(season) }
+
+
+       ##print('payload:',payload)
+       dfs = pd.DataFrame()
+       r =  requests.post(url ,params=payload ,  headers=headers)
+       r.encoding = 'utf8'
+       soup = BeautifulSoup(r.text, 'html.parser')
+       tables = soup.find_all('table',attrs={"class": "hasBorder"})
+       ##print(tables)
+
+       if url_idx == 0 :
+
+        for i in range(1,len(tables)+1) :
+
+          df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+
+          df_list = df.columns
+          last_col_num=len(df_list) -1
+
+
+          if last_col_num == 21 :
+
+             if re.search("停業單位損益",df_list[11]) :
+
+                ## get  12  本期稅後淨利（淨損）/ 21  基本每股盈餘（元）
+                #print(df_list[12] , df_list[21])
+                df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+                df = df.iloc[:,[0,1,12,last_col_num]] ## 每年欄位不同
+
+                df.columns= llist(len(df.columns))
+
+             else :
+                ## get  11  本期稅後淨利（淨損）/ 21  基本每股盈餘（元）
+                #print(df_list[11] , df_list[21])
+                df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+                df = df.iloc[:,[0,1,11,last_col_num]] ## 每年欄位不同
+
+                df.columns= llist(len(df.columns))
+
+          if last_col_num == 29 :
+
+             #print(df_list[19] , df_list[29])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,19,last_col_num]] ## 每年欄位不同   
+
+             df.columns= llist(len(df.columns))
+
+          if last_col_num == 22 :
+
+             #print(df_list[12] , df_list[22])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,12,last_col_num]] ## 每年欄位不同   
+
+             df.columns= llist(len(df.columns))
+
+
+          if last_col_num == 17 :
+
+             #print(df_list[8] , df_list[17]) 
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,8,last_col_num]] ## 每年欄位不同   
+
+             df.columns= llist(len(df.columns))
+
+
+          dfs_b = pd.concat([dfs_b,df],ignore_index=True) ##合併
+       else : ### for 資產負債表Balance
+
+        for i in range(1,len(tables)+1) :
+
+          df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+
+
+          df_list = df.columns
+          last_col_num=len(df_list) -1
+
+
+          if last_col_num == 56 :
+
+            if re.search("其他資產－淨額",df_list[23]) :
+
+               ## get  12  本期稅後淨利（淨損）/ 21  基本每股盈餘（元）
+
+               #print(df_list[24] , df_list[52])
+               df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+               df = df.iloc[:,[0,1,24,52]] ## 每年欄位不同    
+
+               df.columns= llist(len(df.columns))
+
+            else :
+               ## get  11  本期稅後淨利（淨損）/ 21  基本每股盈餘（元）
+               #print(df_list[23] , df_list[52])
+               df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+               df = df.iloc[:,[0,1,23,52]] ## 每年欄位不同  
+
+               df.columns= llist(len(df.columns))
+
+
+          if last_col_num == 22 :
+
+             #print(df_list[4] , df_list[18])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,4,18]] ## 每年欄位不同 
+
+             df.columns= llist(len(df.columns))
+
+          if last_col_num == 48 :
+
+             #print(df_list[15] , df_list[44])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,15,44]] ## 每年欄位不同  
+
+             df.columns= llist(len(df.columns))
+
+          if last_col_num == 21 :
+
+             #print(df_list[4] , df_list[17])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,4,17]] ## 每年欄位不同   
+
+             df.columns= llist(len(df.columns))
+
+          dfs_a = pd.concat([dfs_a,df],ignore_index=True) ##合併
+
+       time.sleep(1)
+
+      ### url_list
+      url_idx =1
+
+    dfs_b.columns =['code','code_name','Net_Income','Eps']
+    dfs_a.columns =['code','code_name','Asset','Equity'] ## 資產/股東權益
+
+
+    df_merge = dfs_b.merge(dfs_a,how='inner' ,on=['code','code_name']).copy()
+    df_merge['ROE']= df_merge.apply(lambda x : round( x['Net_Income']/x['Equity']*100 ,2)  if pd.notnull(x['Net_Income']) else round( x['Net_Income']/x['Equity']*100 ,2) ,axis =1 )
+    df_merge['ROA']= df_merge.apply(lambda x : round( x['Net_Income']/x['Asset']*100 ,2)  if pd.notnull(x['Net_Income']) else round( x['Net_Income']/x['Asset']*100 ,2) ,axis =1 )
+
+    df_merge['code']=df_merge['code'].astype('str')
+
+    ###remove EPS
+    df_merge.drop(columns=['Eps'],inplace=True)
+    #print(df_merge.info())
+    return df_merge
 
 
 
@@ -259,32 +435,25 @@ else :
 
 s_df = pd.DataFrame()
 
-"""
-#### Q4 of years  
-if season == 4 :
+###  season cal 
+if season == 4  :
      yy = today.year -1
      last_yy = today.year -2
 else :
 ### last season replort
       yy = today.year
       last_yy = today.year -1
-"""
-
-### last season replort
-yy = today.year
-last_yy = today.year -1
 
 
 
 ### get atlas mongodb data 
-com_lists = []
-
 
 try :
 
   ### got mongo data from atlas
   dictt = {}
   _columns= {"code":1,"_id":0}
+  com_lists = []
 
   mydoc = atlas_read_mongo_db('stock','com_lists',dictt,_columns)
 
@@ -305,8 +474,17 @@ except :
 
 ### get season data from mongo
 
-mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
 mydoc_code_lists=[]
+
+
+mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
+
+if len(list(mydoc_season)) == 0 :
+
+    season = season -1
+    mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
+
+
 
 for idx in mydoc_season :
    mydoc_code_lists.append(idx.get('code'))
@@ -315,7 +493,8 @@ for idx in mydoc_season :
 mydoc_code_lists.sort()
 com_lists.sort()
 
-
+#print("mydoc_code_lists:",len(mydoc_code_lists))
+#print("com_lists:",len(com_lists))
 ### compare mydoc_code_lists & com_lists 
 if not mydoc_code_lists == com_lists :
 
@@ -326,18 +505,22 @@ if not mydoc_code_lists == com_lists :
         time.sleep(1)
 
         the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
-
+ 
+        #print('try:',yy,last_yy,season)
 
    except :  ### if no data  get last season
 
           if  season == 1   : ## crossover years
 
                 season = 4
-                last_yy  =   today.year -2
-                yy =  today.year -1
+                #last_yy  =   today.year -2
+                #yy =  today.year -1
                 
           else :        
                  season = season -1
+
+          last_yy  =   today.year -2
+          yy =  today.year -1
 
           
           last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
@@ -346,58 +529,90 @@ if not mydoc_code_lists == com_lists :
           
           the_year = stock_season_report( yy ,season ,'undefined','undefined',com_lists)  ## the year season 
 
-
+          #print('except_else:',yy,last_yy,season)
 
    #s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
    s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司名稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
 
-
+   #print('s_df:',s_df)
    #### (累計EPS / 去年累計EPS - 1) * 100% 
 
-   s_df['EPS_g%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+   s_df['EPS_g%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]))/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+   s_df.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
 
 
 
+   ### main code  stock_season_roa_roe
 
-   match_row = s_df.sort_values(by=['EPS_g%'],ascending = False,ignore_index = True).copy()
-   #match_row.columns =["code","code_name","the_year", "last_year" , "EPS_g%" , "season" , "years"]  
-   #match_row.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
-   #code_list = list(match_row["code"])
+
+   try :
+
+        match_row_roe = stock_season_roa_roe(yy, season, com_lists)
+
+   except :
+
+        if  season == 1   : ## crossover years
+
+                season = 4
+                #last_yy  =   today.year -2
+                #yy =  today.year -1
+
+        else :
+                 season = season -1
+
+        yy =  today.year -1
+
+
+        match_row_roe = stock_season_roa_roe( yy, season, com_lists)
+
    
-   #print('match_row_info:',match_row.info())
-   #if not match_row.empty and (len(match_row) != len(com_lists)) :
-   #if not match_row.empty and not  code_list == com_lists  :
+   #print('match_row_e:',match_row_roe.info()) 
+   #print('s_df:',s_df.info())
+
+   match_row = s_df.merge(match_row_roe,how='left' ,on=['code','code_name'])
+
+   match_row = match_row.sort_values(by=['EPS_g%'],ascending = False,ignore_index = True).copy()
+
+   #match_row = s_df.sort_values(by=['EPS_g%'],ascending = False,ignore_index = True).copy()
+
+   #print('match_row_s_df:',match_row.info())
+
    if not match_row.empty  :
 
       records = match_row.copy()
-      records.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
+      #records.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
+      records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA']
+
       records["season"] = str(season)
       records["years"]  = str(yy)
-
+      
+      #print('records:',records.info())
+      ### rename for mongodb
+      #records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA','season','years']
       records =records.to_dict(orient='records')
-
+      ## coding  bec not include ROE ROA
       del_filter = {"years":str(yy),"season":str(season)}
       delete_many_mongo_db('stock','Rep_Stock_Season_Com',del_filter)
       insert_many_mongo_db('stock','Rep_Stock_Season_Com',records)
-
+      
       time.sleep(1)
    ### data empty & get last season report  
    else : 
       
    
-      mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
+      mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
 
       match_row= pd.DataFrame(list(mydoc_season))
 
- 
+      #print('else:',yy,last_yy,season) 
 ###  (mydoc_season) == (com_lists)
 else :   
 
-   mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0})
+   mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
 
    match_row= pd.DataFrame(list(mydoc_season))
-
-
+   
+   #print('else_2:',yy,last_yy,season)
 
 
 ### get last price
@@ -412,7 +627,7 @@ date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().str
 mydoc = Rep_price(date_sii,date_otc,com_lists)
 
 
-match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
+#match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
 
 match_row_doc = pd.merge(match_row,mydoc, on =['code']) ##dataframe join by column
 
@@ -424,23 +639,52 @@ match_row_doc = match_row_doc.astype({match_row_doc.columns[2]:'float',match_row
 
 ### 70% Dividend for earn_yield
 div_per = 0.7 
-match_row_doc['earn_yield']= round(round((match_row_doc.iloc[:,2]/match_row_doc['price']*0.7),4)*100 ,2)
+
+match_row_doc['earn_yield_70%']= round(round((match_row_doc.iloc[:,2]/match_row_doc['price']*0.7),4)*100 ,2)
 match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],4),2)
+
+
 ## PE & earn_yield filter
-match_row=match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['earn_yield']>0)] .copy()
-#match_row=match_row_doc.copy()
-#match_row=match_row.sort_values(by=['earn_yield'],ascending = False,ignore_index = True)
+
+if datetime.datetime.today().isoweekday() == 5 :  ## show all without filter on friday
+   
+   match_row = match_row_doc.copy() 
+
+else :
+
+   match_row = match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['earn_yield_70%']>0)] .copy()
+
+
+#print("PE & earn_yield filter:",match_row.info())
+
+## columns order for mail
+
+the_sst = "累計盈餘{}_Q{}".format(yy,season)
+last_sst = "累計盈餘{}_Q{}".format(yy-1,season)
+
+
+## defiend columns
+match_row.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA','price','earn_yield_70%','PE']
+
+## filter columns 
+match_row =match_row[['code','code_name','the_year','last_year','EPS_g%','price','earn_yield_70%','PE','RoE','RoA']]
+
+## for email
+match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
+
+
 match_row=match_row.sort_values(by=['PE'],ascending = True,ignore_index = True)
 
 
 
-#match_row = match_row.iloc[:,[0,1,2,3,4,5,7]]
-for idx in list(range(2,8)) :
-    if idx == 4 or idx == 6 or  idx == 7:
+### for mail 
+for idx in list(range(2,10)) :
+    if idx == 4 or idx >= 6:
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
-    else : 
+    else :
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
-       #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
+
+
 
 
 
