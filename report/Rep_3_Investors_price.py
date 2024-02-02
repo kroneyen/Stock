@@ -31,14 +31,48 @@ mpl.rc('font', family='Taipei Sans TC Beta')
 
 user_agent = UserAgent()
 
-#ail_time = "18:00:00"
-mail_time = "09:00:00"
+mail_time = "18:00:00"
+#mail_time = "09:00:00"
 
-date_sii = datetime.date.today().strftime('%Y%m%d')
-date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
+def Check_sys_date(i_date_sii , i_date_otc) :
+    import sys
 
-date_sii='20231115'
-date_otc='112/11/15'
+    o_date_sii = None
+    o_date_otc = None
+    try :
+          i_date_sii = sys.argv[1]
+          i_date_otc = sys.argv[2]
+
+    except :
+           print('please execute python with sys_argv')
+           sys.exit(1)
+
+
+    if i_date_sii == '0' :
+
+          o_date_sii = datetime.date.today().strftime('%Y%m%d')
+
+    else :
+
+           o_date_sii = i_date_sii
+
+    if i_date_otc  == '0' :
+
+           o_date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
+
+    else :
+
+           o_date_otc = i_date_otc
+
+    return o_date_sii , o_date_otc
+
+
+
+#date_sii = datetime.date.today().strftime('%Y%m%d')
+#date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
+
+#date_sii='20231116'
+#date_otc='112/11/16'
 
 match_row = pd.DataFrame()
 
@@ -158,11 +192,6 @@ def read_aggregate_mongo_db(_db,_collection,dicct):
     return collection.aggregate(dicct)
 
 
-
-
-
-
-
 def Rep_3_Investors(date_sii,date_otc,com_lists) : 
 
 
@@ -198,8 +227,6 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
        df = df.iloc[:,[0,1,4,13,22,23]]
        df.columns= llist(len(df.columns)) ## define new column array
        df = df[df[0].isin(com_lists)] ##比對
-
-     ##df = df[df[0].isin(com_lists)] ##比對
      
      dfs = pd.concat([dfs,df],ignore_index=True) ##合併
           
@@ -214,10 +241,7 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
   dfs[3] =round((dfs[3]/1000),0).astype(int)
   dfs[4] =round((dfs[4]/1000),0).astype(int)
   dfs[5] =round((dfs[5]/1000),0).astype(int)
-  #dfs = dfs.style.apply(color_negative_red)
   dfs.columns = ['公司代號', '公司簡稱', '法人', '投信', '自營商','合計'] 
-  #dfs = dfs.sort_values(by=['公司代號'])    
-  #dfs = dfs.style.applymap(tableColor, subset=['法人', '投信', '自營商'])
 
 
   return dfs.sort_values(by=['公司代號'])
@@ -309,7 +333,11 @@ del_png.del_images()
 
 ### call function
 
+date_sii = None
 
+date_otc = None
+
+date_sii,date_otc  = Check_sys_date(None,None)
 
 df_Rep_3_Investors = Rep_3_Investors(date_sii,date_otc,com_lists)
 df_Rep_price = Rep_price(date_sii,date_otc,com_lists)
@@ -324,15 +352,24 @@ match_row = df_s.sort_values(by=['漲跌(+/-)'],ascending=False,ignore_index= Tr
 local_mongo=[]
 local_redis=[]
 
-local_mongo = read_mongo_db('stock','com_list',{},{"code": 1,"name": 1,"_id": 0})
+local_mongo_doc = read_mongo_db('stock','com_list',{},{"code": 1,"name": 1,"_id": 0})
+
+for idx in local_mongo_doc :
+    local_mongo.append(idx.get('code'))
 
 local_redis = get_redis_data('com_list','lrange',0,-1) 
+
+
+#print('local_mongo:',local_mongo)
+#print('local_redis:',local_redis)
      
 if com_lists != local_mongo : 
    drop_mongo_db('stock','com_list')
    for com in com_lists :
      _values = { 'code' : com ,'last_modify': datetime.datetime.now() }
      insert_mongo_db('stock','com_list',_values)    
+
+
 
 
 ##insert local redis
@@ -579,6 +616,7 @@ match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,11,10,12]].fillna(0)
 plot_Rep_3_Investors_price(match_row.iloc[:,[0,9]])
 
 
+match_row['con_days'] = match_row['con_days'].astype('int64')
 
 
 for  idx in range(2,11,1) :
