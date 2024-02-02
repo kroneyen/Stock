@@ -349,7 +349,10 @@ def plot_Rep_Stock_Holder_code() :
          
    
          name_idx +=1
-      
+
+      #dfs = dfs.sort_values(by=['level_min','avg_price'],ascending=[False,True] ,ignore_index = True)
+      #plot_data_df = plot_data_df.sort_values(by=['level_min','avg_price'],ascending=[False,True] ,ignore_index = True)
+
       ######## for email table #########
 
       ### sum_percentage data type trans to float
@@ -366,14 +369,24 @@ def plot_Rep_Stock_Holder_code() :
    
       ######### sum_percentage  for plot set ########
       records = plot_data_df.fillna(0).astype('float64')
+      #match_row = match_row.sort_values(by=['houseage','price'],ignore_index = True)
    
       for idx in range(0,len(records.columns),5):
       
          idx_records = records.iloc[ : , idx:idx+5 ]
        
-         idx_records.plot(y = idx_records.columns)
+         #idx_records.plot(y = idx_records.columns)
+         #plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
+         ## 顯示公司在尾端 
+         ax = idx_records.plot(y = idx_records.columns)
+         for line, name in zip(ax.lines, idx_records.columns):
+             y = line.get_ydata()[-1]
+             ax.annotate(name, xy=(1,y), xytext=(3,0), color=line.get_color(),
+                xycoords = ax.get_yaxis_transform(), textcoords="offset points",
+                size=10, va="center")
+
          plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
-   
+         plt.clf()
    
       return dfs ,last_day
 
