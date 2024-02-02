@@ -12,6 +12,17 @@ import requests
 from pymongo import MongoClient
 import del_png
 from fake_useragent import UserAgent
+from pymongo import MongoClient
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.font_manager import fontManager
+
+
+# 改style要在改font之前
+plt.style.use('seaborn')
+fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
+mpl.rc('font', family='Taipei Sans TC Beta')
 
 
 
@@ -21,7 +32,7 @@ del_png.del_images()
 
 today_week = datetime.date.today().strftime("%w")
 mail_time = "18:00:00"
-#ail_time = "09:00:00"
+#mail_time = "09:00:00"
 
 """
 def get_redis_data():
@@ -128,7 +139,64 @@ def monthly_report():
      #return match_row.iloc[:,[0,1,8,9,4,10,11,7]]
      return df_report,report_day
 
+
+def Plot_Rep_Stock_Month(report,report_day) :
+   
+   month =str(report_day.month)
+   year =str(report_day.year) 
+
+   the_years_df = pd.DataFrame()
+   last_years_df = pd.DataFrame() 
+
+   dfs = report.rename(columns={'公司代號': 'cdoe' ,'公司名稱' : 'code_name' ,'當月營收(百萬)': 'the_month' , '去年當月(百萬)' : 'last_month', '累計YoY(%)' : 'T_YoY(%)'})
+   dfs['x_code']= dfs.apply(lambda x: x['cdoe']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
+   ### x_code,the_month/last_month/累計YoY(%)
+   the_years_df = dfs.iloc[:,[8,2,7]].copy() 
+   ###adding  column Y_M 
+   the_years_df['Y_M']= the_years_df.apply(lambda x: year +'_' + month if pd.notnull(x['x_code']) else year +'_' + month ,axis =1  ) 
+   the_years_df.rename(columns={'the_month': 'Month_Values' },inplace =True )
+
+   last_years_df = dfs.iloc[:,[8,3,7]].copy()
+   ###adding  column Y_M
+   last_years_df['Y_M']= last_years_df.apply(lambda x: str(int(year) -1) +'_' + month if pd.notnull(x['x_code']) else str(int(year) -1) +'_' + month ,axis =1  ) 
+   last_years_df.rename(columns={'last_month': 'Month_Values' },inplace =True )
+
+   dfs = pd.concat([the_years_df,last_years_df],axis=0) 
+   
+
+   #records = dfs.sort_values(by=['T_YoY(%)'] ,ascending = False).copy()
+   records = dfs.sort_values(by=['T_YoY(%)','Month_Values'] ,ascending = False).copy()
+
+   for idx in range(0,len(records),10):
+
+      idx_records = records.iloc[idx:idx+10]
+
+      colors = ['tab:blue', 'tab:orange', 'tab:red', 'tab:green', 'tab:gray']
+
+      #splot = sns.barplot( data=idx_records, x='x_code', y="EPS_g%", hue='years_s',palette = ['tab:blue', 'tab:orange']) seaborn 0.11.2 version before
+      #splot = sns.barplot(idx_records, x='x_code', y="EPS", hue='years_s' ,palette = random.sample(colors, 2))
+      splot = sns.barplot(data=idx_records, x='x_code', y="Month_Values", hue='Y_M' ,palette = ['tab:orange' ,'tab:blue'])
+
+      ## 顯示數據
+      for g in splot.patches:
+         splot.annotate(format(g.get_height(), '.0f'),
+                   (g.get_x() + g.get_width() / 2., g.get_height()),
+                   ha = 'center', va = 'center',
+                   xytext = (0, 9),
+                   textcoords = 'offset points')
+
+      #plt.show()
+      plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
+      ###  clear the figure 
+      plt.clf()
+
+
+
 report ,report_day = monthly_report()
+
+Plot_Rep_Stock_Month(report,report_day)
+
+
 #report = report.to_markdown(index= 0)
 #report = report.to_html()
 #report = tableize(report)
