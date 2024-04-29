@@ -46,6 +46,18 @@ def read_mongo_db(_db,_collection,_dicct,_columns):
     return collection.find(_dicct,_columns)
 
 
+def Get_Collection_Names(_db):
+    db = c[_db] ## database
+    return db.list_collection_names()
+
+
+def getCollectionInfos(_db,_collection):
+    db = c[_db] ## database
+    
+    return db.command({'listCollections': 1, 'filter': {'name': _collection}})   
+
+
+
 ### mongodb atlas connection
 conn_user = get_redis_data('mongodb_user',"hget","user",'NULL')
 conn_pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
@@ -83,6 +95,13 @@ def atlas_delete_many_mongo_db(_db,_collection,_dicct):
     return collection.delete_many(_dicct)
 
 
+def atlas_create_view(_db,_collection,_view,_pipe):
+    db = conn[_db] ## database
+    
+    return db.command({"create": _view, "viewOn": _collection , "pipeline":_pipe }) 
+
+
+
             
 
 ### execute python with sys 
@@ -115,12 +134,21 @@ def data_insert_mongo(_db, _collection, _dicct):
    if local_data.count() > 0 : 
 
      d_dicct = {}
-
+     
      ## delete old atlas mongo data  
      atlas_delete_many_mongo_db(_db,_collection,d_dicct)     
 
      atlas_insert_many_mongo_db(_db,_collection,local_data)
       
+
+def create_view(v_db,v_collection,v_view,v_pipe) :
+    
+    atlas_drop_mongo_db(v_db,v_view)
+    
+    atlas_create_view(v_db,v_collection,v_view,v_pipe)
+    
+
+
 
 
 if __name__ == '__main__':

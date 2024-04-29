@@ -31,8 +31,8 @@ mpl.rc('font', family='Taipei Sans TC Beta')
 del_png.del_images()
 
 
-mail_time = "18:00:00"
-#mail_time = "09:00:00"
+#mail_time = "18:00:00"
+mail_time = "09:00:00"
 
 
 
@@ -96,6 +96,10 @@ def read_mongo_db(_db,_collection,dicct,_columns):
     collection = db[_collection] ## collection 
     return collection.find(dicct,_columns)
 
+def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns).sort(_sort).limit(1)
 
 
 
@@ -154,23 +158,27 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 
 
 def plot_Rep_Stock_Season(season,year,com_lists) :
-
+      
+      #print(season,year)
       dfs = pd.DataFrame()
       for idx in com_lists :
       
       
-         altas_mydoc = atlas_read_mongo_db('stock','Rep_Stock_Season_Com',{'code': idx ,'season': str(season) , "years" : str(year)  },{'_id':0})
+         #altas_mydoc = atlas_read_mongo_db('stock','Rep_Stock_Season_Com',{'code': idx ,'season': str(season) , "years" : str(year)  },{'_id':0})
+         mydoc = read_mongo_db('stock','Rep_Stock_Season_Com',{"season": str(season) , "years" : str(year) ,"code": idx  },{"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
       
-      
-         df = pd.DataFrame(list(altas_mydoc))
-      
+         df = pd.DataFrame(list(mydoc))
+     
+         #print('before:',df.info())  
          if not df.empty :
            
            tmp_df = pd.DataFrame()
-           rest_the_year_df = df.iloc[:,[0,1,2,5,6]].copy()
-           rest_last_year_df = df.iloc[:,[0,1,3,5,6]].copy()
+           ### add column roa &roe
+           rest_the_year_df = df.iloc[:,[0,1,2,5,6,7,8]].copy()
+           rest_last_year_df = df.iloc[:,[0,1,3,5,6,7,8]].copy()
 
-           rest_last_year_df.loc[:,'years'] = str(int(rest_last_year_df.iloc[0,4]) - 1)
+           #rest_last_year_df.loc[:,'years'] = str(int(rest_last_year_df.iloc[0,4]) - 1)
+           rest_last_year_df.loc[:,'years'] = str(int(rest_last_year_df.iloc[0,6]) - 1)
            #rest_last_year_df['years'] = str(int(last_years_values)-1)
            #rest_last_year_df['years'] = rest_the_year_df.apply(lambda x: str(int(x['years'])-1) if pd.notnull(x['years']) else x['years'],axis =1  )
       
@@ -185,20 +193,28 @@ def plot_Rep_Stock_Season(season,year,com_lists) :
             
            dfs = pd.concat([dfs,tmp_df],axis=0)
       
-      dfs['EPS_g%']= dfs.apply(lambda x: x['last_year'] if pd.notnull(x['last_year']) else x['the_year'],axis =1  )
+
+      #dfs['EPS_g%']= dfs.apply(lambda x: x['last_year'] if pd.notnull(x['last_year']) else x['the_year'],axis =1  )
+      dfs['EPS']= dfs.apply(lambda x: x['last_year'] if pd.notnull(x['last_year']) else x['the_year'],axis =1  )
       dfs['x_code']= dfs.apply(lambda x: x['code']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
       dfs['years_s']= dfs.apply(lambda x: x['years']+'_Q'+ x['season'] if pd.notnull(x['years']) else   x['years']+'_Q'+ x['season'],axis =1  )
       dfs.dropna(axis='columns' ,inplace=True)
       
-      records = dfs.iloc[:,[4,5,6]]
-     
+      #print(dfs.info()) 
+      #records = dfs.iloc[:,[4,5,6]]
+      records = dfs.iloc[:,[6,7,8]]
+    
+      #print(records.info()) 
+
+      ### without ROE / ROA splot 
+
       for idx in range(0,len(records),10):
       
          idx_records = records.iloc[idx:idx+10]
          colors = ['tab:blue', 'tab:orange', 'tab:red', 'tab:green', 'tab:gray'] 
          idx_records.index = idx_records['x_code']
          #seaborn 0.11.2 sns.catplot(data=tips, kind="bar", x="day", y="total_bill", hue="smoker") 
-         splot = sns.barplot( data=idx_records, x='x_code', y="EPS_g%", hue='years_s',palette = ['tab:blue', 'tab:orange'])
+         splot = sns.barplot( data=idx_records, x='x_code', y='EPS', hue='years_s',palette = ['tab:blue', 'tab:orange'])
          
          ## 顯示數據
          for g in splot.patches:
@@ -213,6 +229,8 @@ def plot_Rep_Stock_Season(season,year,com_lists) :
          ###  clear the figure 
          plt.clf()
 
+
+      
 
 
 ###  5/15,8/14,11/14,3/31
@@ -229,13 +247,12 @@ elif  today.month >= 10 and today.month<= 12 :
   season = 3
 else :
   season = 4 
-
+  ### month 1~3
          
 #### 累計EPS年增率
 
 s_df = pd.DataFrame()
 
-"""
 ###  season cal 
 if season == 4  :
      yy = today.year -1
@@ -244,11 +261,7 @@ else :
 ### last season replort
       yy = today.year
       last_yy = today.year -1
-"""
 
-
-yy = today.year
-last_yy = today.year -1
 
 #### get com_lists
 
@@ -270,7 +283,8 @@ except :
 
 
 
-
+"""
+###main code 
 try :
 
         last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
@@ -281,24 +295,28 @@ try :
 
 except :
         
-         
+        ### season not match  
         ### if no data  get last season
         if  season == 1   : ## crossover years
 
                 season = 4
-                last_yy  =   today.year -2
-                yy =  today.year -1
+                #last_yy  =   today.year -2
+                #yy =  today.year -1
 
         else :
                  season = season -1
 
+        last_yy  =   today.year -2
+        yy =  today.year -1
 
 
-        last_year = stock_season_report( last_yy ,season -1 ,'undefined','undefined',com_lists)  ## last year season
+        last_year = stock_season_report( last_yy ,season  ,'undefined','undefined',com_lists)  ## last year season
 
         time.sleep(1)
 
-        the_year = stock_season_report( yy ,season -1 ,'undefined','undefined',com_lists)  ## the year season
+        the_year = stock_season_report( yy ,season  ,'undefined','undefined',com_lists)  ## the year season
+
+        print('except_else:' , yy, last_yy , season) 
  
 
 
@@ -306,7 +324,8 @@ s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司名稱']
 
 #### (累計EPS / 去年累計EPS - 1) * 100% 
 #s_df['EPS成長%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]).abs() )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
-s_df['EPS年增%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]) )/ (s_df.iloc[:,3]) ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+#s_df['EPS年增%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]) )/ (s_df.iloc[:,3]) ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
+s_df['EPS年增%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]) )/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
 
 match_row = s_df.sort_values(by=['EPS年增%'],ascending = False,ignore_index = True).copy()
 
@@ -340,31 +359,75 @@ if chk == False :
 
 time.sleep(10)
 
-try :
-## bug
-      plot_Rep_Stock_Season(season,yy,com_lists)
+"""
 
-except BulkWriteError as e:
 
-       print('plot_Rep_Stock_Season:',e.details)
+###main code 
+
+## get last row 
+
+"""
+get_last_data = read_mongo_db('stock','Rep_Stock_Season_Com',{'code':com_lists[0]},{"_id":0,"years" : 1,"season":1})
+
+get_last_data_df =pd.DataFrame(list(get_last_data))
+
+get_last_data_df = get_last_data_df.sort_values(by=['years','season'],ascending=False)
+
+#print('get_last_data_df:',get_last_data_df)
+
+s_season = get_last_data_df.iloc[0,0]
+s_year = get_last_data_df.iloc[0,1]
+"""
+
+## get last row
+#_sort=[{"_id",-1}]
+_sort=[("years",-1) ,("season" , -1)]
+
+get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years" : 1,"season":1},_sort)
+
+for idx in get_last_data :
+    s_season = str(idx.get('season'))
+    s_year = str(idx.get('years'))
+
+
+#print(type(s_season),type(s_year))
+#print(s_season,s_year)
+
+mydoc = read_mongo_db('stock','Rep_Stock_Season_Com',{'season': s_season , 'years' : s_year ,'code': {"$in" : com_lists}},{'_id':0,'Net_Income':0,'Asset':0,'Equity':0,'season':0,'years':0})
+
+match_row=pd.DataFrame(list(mydoc))
+#print('match_row_doc:',match_row.info())
+if not match_row.empty :
+
+   match_row=match_row.sort_values(by=['EPS_g%'],ascending=False,ignore_index = True)
+
+
+   try :
+        #plot_Rep_Stock_Season(s_season,s_year,com_lists)
+        plot_Rep_Stock_Season(s_season,s_year,match_row['code'])
+
+   except BulkWriteError as e:
+
+         print('plot_Rep_Stock_Season:',e.details)
         
 
 
-for idx in list(range(2,5)) :
+   for idx in list(range(2,7)) :
    
-    if idx == 4 :  
+       if idx == 4 or idx ==5 or idx == 6:  
 
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 
-    else :
+       else :
 
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x) if x < 0 else str(x))
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x) if x < 0 else str(x))
 
 
-if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
+if  time.strftime("%H:%M:%S", time.localtime()) > mail_time :
 
     if not match_row.empty :
        body = match_row.to_html(classes='table table-striped',escape=False)
-       send_mail.send_email('{year}_stock_Q{season}_report' .format(year = yy ,season=season) ,body)
+       #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = yy ,season=season) ,body)
+       send_mail.send_email('{year}_stock_Q{season}_report' .format(year = s_year ,season=s_season) ,body)
 else :
     print(match_row.to_html(escape=False))

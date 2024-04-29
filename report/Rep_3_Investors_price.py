@@ -31,8 +31,8 @@ mpl.rc('font', family='Taipei Sans TC Beta')
 
 user_agent = UserAgent()
 
-mail_time = "18:00:00"
-#mail_time = "09:00:00"
+#mail_time = "18:00:00"
+mail_time = "09:00:00"
 
 def Check_sys_date(i_date_sii , i_date_otc) :
     import sys
@@ -71,8 +71,8 @@ def Check_sys_date(i_date_sii , i_date_otc) :
 #date_sii = datetime.date.today().strftime('%Y%m%d')
 #date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
 
-#date_sii='20231116'
-#date_otc='112/11/16'
+#date_sii='20240304'
+#date_otc='113/03/04'
 
 match_row = pd.DataFrame()
 

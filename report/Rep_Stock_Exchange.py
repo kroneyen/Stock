@@ -32,11 +32,11 @@ date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.da
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20231025'
-#date_otc= '112/10/25'
+#date_sii= '20240322'
+#date_otc= '113/03/22'
 
-#mail_time = '09:00:00'
-mail_time = '18:00:00'
+mail_time = '09:00:00'
+#mail_time = '18:00:00'
 
 ### redis connection & data 
 

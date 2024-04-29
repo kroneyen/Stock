@@ -26,7 +26,8 @@ mpl.rc('font', family='Taipei Sans TC Beta')
 
 
 
-mail_time = '10:00:00'
+#mail_time = '10:00:00'
+mail_time = '09:00:00'
 
 ### redis connection & data 
 

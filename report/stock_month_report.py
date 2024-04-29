@@ -136,7 +136,6 @@ def monthly_report():
      df_report = df_report.iloc[:,[0,1,4,5,2,6,7,3]]
      df_report = df_report.sort_values(by=['累計YoY(%)'],ascending = False,ignore_index = True)
      #return match_row.iloc[:,[0,1,8,9,4,10,11,7]]
-     #return match_row.iloc[:,[0,1,8,9,4,10,11,7]]
      return df_report,report_day
 
 
@@ -165,12 +164,14 @@ def Plot_Rep_Stock_Month(report,report_day) :
    
 
    #records = dfs.sort_values(by=['T_YoY(%)'] ,ascending = False).copy()
-   records = dfs.sort_values(by=['T_YoY(%)','Month_Values'] ,ascending = False).copy()
+   records = dfs.sort_values(by=['T_YoY(%)','Y_M'] ,ascending = False).copy()
 
    for idx in range(0,len(records),10):
 
       idx_records = records.iloc[idx:idx+10]
-
+     
+      #idx_records = idx_records.sort_values(by=['x_code','Y_M'],)
+     
       colors = ['tab:blue', 'tab:orange', 'tab:red', 'tab:green', 'tab:gray']
 
       #splot = sns.barplot( data=idx_records, x='x_code', y="EPS_g%", hue='years_s',palette = ['tab:blue', 'tab:orange']) seaborn 0.11.2 version before
@@ -217,7 +218,7 @@ if not report.empty :
        body = report.to_html(escape=False)
        #print('body:',body)
        #send_mail.send_email('stock_month_report',body)
-       send_mail.send_email('stock_month_%s_report' % mail_month ,body)
+       send_mail.send_email('Stock_Month_%s_Report' % mail_month ,body)
 
     else :
       report = report.to_markdown(index= 0)
