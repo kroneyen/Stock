@@ -470,9 +470,10 @@ except :
 
 
 ### get season data from mongo
-yy= today.year -1
+"""
+yy=2023
 season=4
-
+"""
 
 mydoc_code_lists=[]
 
@@ -486,14 +487,13 @@ match_row= pd.DataFrame(list(mydoc_season))
 #if len(list(chk_season)) == 0   : 
 if match_row.empty   : 
 
-    if  season == 1   : ## crossover years
+    if  today.year -1 == 0 :  ## crossover years
 
                 season = 4
+                yy =  today.year -1
                 
     else :        
                  season = season -1
-   
-    yy =  today.year -1
 
      
     mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season),"code" :  {"$in" : com_lists}},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
@@ -576,8 +576,6 @@ match_row =match_row[['code','code_name','the_year','last_year','EPS_g%','price'
 ## for email
 match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
 
-#print(match_row.head())
-
 ## divieded at seson 4
 #if season == 4 :
 if today.month >= 3 :
@@ -603,7 +601,7 @@ if today.month >= 3 :
 
    dfs['stock_dividend'] = dfs['stock_dividend'].round(2)
 
-   #print('dfs:',dfs.head())
+   #print('dfs:',dfs.info())
 
    #df_merge = pd.merge(df,dfs, on =['code'])
    #df_merge = pd.merge(df,dfs, left_on =['code'])
@@ -612,7 +610,6 @@ if today.month >= 3 :
    df_merge.rename(columns={'cash_dividend':'cash_div','dividend_date': 'div_date','stock_dividend':'stock_div','dividend_stock_date':'div_stock_date'},inplace=True)
 
    #match_row = df_merge.copy()
-   #print(df_merge.head())
 
    df_merge['yield%'] = df_merge.apply(lambda x: round(x['cash_div']/x['price']*100,2) if (pd.notnull(x['cash_div'])) else x['cash_div'] ,axis=1)
    match_row = df_merge[['code','code_name',the_sst,last_sst,'EPS_g%','price','yield%','PE','RoE','RoA','cash_div','div_date','stock_div','div_stock_date']]
@@ -645,7 +642,7 @@ else :
 ###
 plot_Stock_Eps_Yield_PE_Season(season,yy,com_lists)
 
-#print(match_row.head())
+#print(match_row.info())
 
 
 for idx in list(range(2,17)) :
@@ -684,6 +681,7 @@ for idx in list(range(2,17)) :
             ##match_row.iloc[:,17]
             match_row['cheap_check'] =  compare_data.apply(lambda  x: 1   if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else 0 ,axis=1)
 
+
          elif idx == 15 :
             p_stype= f'<p style="background-color:Aqua;">%s</p>'
             ##match_row.iloc[:,18]
@@ -694,7 +692,6 @@ for idx in list(range(2,17)) :
            p_stype= f'<p style="background-color:Tomato;">%s</p>'
          
 
-         #match_row.iloc[:,idx] =  compare_data.apply(lambda  x: f'<p style="background-color:Tomato;">%s</p>' % x[compare_name[2]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[2]],axis=1)
          match_row.iloc[:,idx] =  compare_data.apply(lambda  x: p_stype  % x[compare_name[2]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[2]],axis=1)
 
          ### color for price / cash_div
@@ -705,6 +702,7 @@ for idx in list(range(2,17)) :
             match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
 
             match_row.iloc[:,5] =  compare_data.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' % x[compare_name[0]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[0]],axis=1)
+
             match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
          
 
@@ -713,8 +711,10 @@ for idx in list(range(2,17)) :
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
 
 
+
 check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div']
 check_assc = [False,False,False,False]
+
 
 
 match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
@@ -727,8 +727,7 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        body = match_row.to_html(classes='table table-striped',escape=False)
        #print(body)
        #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = today.year ,season=season) ,body)
-       #to_date = datetime.date.today().strftime("%Y%m%d")
-       send_mail.send_email('Stock_Eps_Yield_PE_{today}'.format(today=date_sii),body)
+       send_mail.send_email('Stock_Eps_Yield_PE_{today}_Q{s}'.format(today=date_sii,s=season),body)
 else :
     #print(match_row.to_string(index=False))
     #print(match_row.to_html(escape=False))

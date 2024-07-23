@@ -14,12 +14,31 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.font_manager import fontManager
+import re
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+import random
+import del_png
+import numpy as np
 
 
 # 改style要在改font之前
 plt.style.use('seaborn')
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
+
+
+options = webdriver.ChromeOptions()
+options.add_argument("--headless")
+options.add_argument('--disable-dev-shm-usage')
+options.add_argument("--no-sandbox")
+prefs = {"download.default_directory":"./Dividend_file"}
+options.add_experimental_option("prefs",prefs)
+web = webdriver.Chrome(options=options)
+
+del_png.del_files()
 
 
 
@@ -93,6 +112,13 @@ def delete_many_mongo_db(_db,_collection,_values):
     #print(d.deleted_count ," documents deleted !!")
 
 
+def update_many_db(_db,_collection,dicct,_values):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection
+    return collection.update_many(dicct,{'$set' :_values })
+
+
+
 ### mongodb atlas connection
 user = get_redis_data('mongodb_user',"hget","user",'NULL')
 pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
@@ -157,9 +183,9 @@ def Dividend(year,com_lists) :
     url ='https://stock.wespai.com/rate'+str(year-1911)
     ### goodinfo
     ## sii / otc   
-    ## https://goodinfo.tw/tw/StockDividendPolicyList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024 
+    ## https://goodinfo.tw/tw/StockDividendPolicyList.asp?MARKET_CAT=%E4%B8%8A%E5%B8%82&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024 
     ## https://goodinfo.tw/tw/StockDividendPolicyList.asp?MARKET_CAT=%E4%B8%8A%E6%AB%83&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024
-
+    ## https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024
     ##    url_1 = 'https://mops.twse.com.tw/mops/web/ajax_t05st09_2?encodeURIComponent=1&step=1&firstin=1&off=1&isnew=0&co_id='
     ##    url_2 = '&date1=109&date2=109&qryType=2'
  
@@ -177,6 +203,116 @@ def Dividend(year,com_lists) :
 
     return dfs
 
+
+def Dividend_goodinfo() :
+
+
+    url = 'https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024'
+
+    #url = 'https://histock.tw/stock/dividend.aspx'
+    url_html = './Dividend_file/SaleMonDetail.html'
+
+
+    #prefs = {"download.default_directory":"/content"};
+
+    # 偽瀏覽器
+    #headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/ 89.0.4389.82 Safari/537.36'}
+
+    #r = requests.get(url, headers= headers)
+    #r.encoding = 'utf-8'
+   
+    #time.sleep(random.randrange(1, 2, 1))
+    
+    web.get(url)
+    time.sleep(random.randrange(3, 5, 1))
+    
+    html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/table/tbody/tr/td/div/form/nobr[4]/input[2]'
+    ### download file
+    file_download = WebDriverWait(web, 5).until(EC.element_to_be_clickable((By.XPATH,html_d)))
+    file_download.click()
+    time.sleep(random.randrange(10, 15, 1))
+   
+    
+    #df = pd.read_html('SaleMonDetail.html') ## []list to pandas
+    df = pd.read_html(url_html) ## []list to pandas
+
+    dfs = df[0].iloc[:,[1,2,15,4,18,9]]
+    dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date']
+    dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace(' 即將除息','').replace("'24/","")  if pd.notnull(x) and re.match("^'24/", x)  else np.NAN if re.match("^'23/", x) else x )
+    dfs.dropna(subset=['dividend_date'],inplace = True)
+
+    return dfs.sort_values(by=['dividend_date'],ascending = False,ignore_index = True)
+
+
+
+def Dividend_twse():
+
+    ###公開資訊站API
+    url = 'https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL'
+
+
+    df_all = pd.DataFrame()
+    #pd.set_option('display.max_rows', None)
+    #pd.set_option('display.max_columns', None)
+
+    # 偽瀏覽器
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/ 89.0.4389.82 Safari/537.36'}
+
+
+    dfs = pd.read_json(url)
+    
+    dfs['Date_set'] = dfs['Date'].apply(lambda x: str(x).replace(str(datetime.date.today().year -1911 ),'')  if pd.notnull(x)  else  x )
+    dfs['years'] = dfs['Date'].apply(lambda x: str(datetime.date.today().year)  if pd.notnull(x)  else  x )
+    dfs['Date'] = dfs['Date_set'].apply(lambda x: x[0:2] +'/' + x[2:4]  if pd.notnull(x)  else  x )
+    
+    match_row = dfs.iloc[:,[1,2,7,0,4,0,13]].copy()
+    
+    match_row.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date','years']
+
+    match_row['dividend_date'] = match_row.apply(lambda x : checked(x['cash_dividend'],x['dividend_date']) ,axis=1 )
+    match_row['cash_dividend'] = match_row.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
+    match_row['dividend_stock_date'] = match_row.apply(lambda x : checked(x['stock_dividend'],x['dividend_stock_date']) ,axis=1 )
+    match_row['stock_dividend'] = match_row.apply(lambda x : dividend_checked(x['stock_dividend']) ,axis=1 )
+
+
+    if not match_row.empty  : 
+
+       records = match_row.copy() 
+       records =records.to_dict(orient='records')
+
+       com_list = list(match_row['code'])
+       del_year = match_row.iloc[0,6]
+       del_filter ={'years': del_year , 'code': {'$in' : com_list}}      
+
+       delete_many_mongo_db('stock','Rep_Stock_dividind_Com',del_filter)
+       insert_many_mongo_db('stock','Rep_Stock_dividind_Com',records)
+  
+   
+    #return match_row.sort_values(by=['dividend_date'],ascending = False,ignore_index = True)
+    #print('Dividend_twse:',match_row.info())
+
+
+def checked(x,y) :
+
+      try:
+        if float(x) > 0 :
+          return y
+        else :
+          return np.nan
+
+      except:
+        return np.nan
+
+def dividend_checked(x) :
+
+      try:
+        if float(x) > 0 :
+          return x
+        else :
+          return 0
+
+      except:
+        return 0
 
 
 
@@ -244,31 +380,47 @@ except :
 #yy = year
 
 div_data = Dividend(yy,com_lists)
-#print(div_data.info())
+
+#goodinfo_data = Dividend_goodinfo()
+
+#twse_data = Dividend_twse()
+
+#print(goodinfo_data.info())
 
 div_data.columns= llist(len(div_data.columns))
-div_data = div_data.iloc[:,[0,1,2,3,4,5,]]
-div_data.rename(columns={0: 'code',1 :'code_name', 2:'cash_dividend',3: 'dividend_date',4: 'stock_dividend',5:'dividend_stock_date'}, inplace=True)
+div_data = div_data.iloc[:,[0,2,3,4,5]]
+div_data.rename(columns={0: 'code', 2:'cash_dividend',3: 'dividend_date',4: 'stock_dividend',5:'dividend_stock_date'}, inplace=True)
 
+#div_data['cash_dividend'] = div_data.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
+#div_data['stock_dividend'] = div_data.apply(lambda x : dividend_checked(x['stock_dividend']) ,axis=1 )
+
+#div_data['cash_dividend'].fillna(value=0, inplace=True)
+
+#print(div_data[div_data['code'] == "2449"])
 
 ## get com_list
 
+dictt = {}
+_columns= {"_id":0 , "code" : 1,"name" : 1}
 
-com_mydoc = read_mongo_db('stock','com_lists',{},{"_id":0 , "code" : 1,"name" : 1})
+
+com_mydoc = atlas_read_mongo_db('stock','com_lists',dictt,_columns)
 
 com_df = pd.DataFrame(list(com_mydoc))
 
 com_df.rename(columns={'name' : 'code_name'}, inplace=True)
 
 
-div_doc = com_df.merge(div_data,how='left' ,on=['code','code_name'])
+div_doc = com_df.merge(div_data,how='left' ,on=['code'])
 
-#match_row = s_df.merge(match_row_roe,how='left' ,on=['code','code_name'])
+#print(div_doc[div_doc['code'] == "2449"])
+
 
 ### cash_dividend NaN is 0 for history data
-if yy < today.year :
+#if yy < today.year :
 
-   div_doc['cash_dividend']=div_doc['cash_dividend'].fillna(0)
+div_doc['cash_dividend']=div_doc['cash_dividend'].fillna(0)
+div_doc['stock_dividend']=div_doc['stock_dividend'].fillna(0)
 
 
 match_row = div_doc.copy()
@@ -281,7 +433,7 @@ if not match_row.empty  :
 
       #records["season"] = str(season)
       records["years"]  = str(yy)
-
+      #print(str(yy))
       #print('records:',records.info())
       ### rename for mongodb
       #records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA','season','years']
@@ -289,8 +441,15 @@ if not match_row.empty  :
       ## coding  bec not include ROE ROA
       #del_filter = {"years":str(yy),"season":str(season)}
       del_filter = {"years":str(yy)}
+     
       #print("del_filter:",del_filter)
       delete_many_mongo_db('stock','Rep_Stock_dividind_Com',del_filter)
       insert_many_mongo_db('stock','Rep_Stock_dividind_Com',records)
 
       time.sleep(1)
+      
+      ### doublecheck from twse
+
+      Dividend_twse()
+
+

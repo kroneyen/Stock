@@ -490,13 +490,9 @@ except :
 
 
 
-
-
 ### get season data from mongo
 
 mydoc_code_lists=[]
-
-#print('yy:',yy , 'season:',season)
 
 
 mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
@@ -520,14 +516,9 @@ com_lists.sort()
 ### compare mydoc_code_lists & com_lists
 the_year = pd.DataFrame()
 
+### no get data again
 
-yy= today.year -1
-season=4
-last_yy= today.year -2
-
-
-### not get data again 
-
+ 
 if not mydoc_code_lists == com_lists :
 
    try :
@@ -538,7 +529,7 @@ if not mydoc_code_lists == com_lists :
 
         the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
  
-        #print('try:',yy,last_yy,season)
+        #print('try 1:',yy,last_yy,season)
 
    except :  ### if no data  get last season
 
@@ -561,7 +552,7 @@ if not mydoc_code_lists == com_lists :
           
           the_year = stock_season_report( yy ,season ,'undefined','undefined',com_lists)  ## the year season 
 
-          #print('except_else:',yy,last_yy,season)
+          #print('except_else 1:',yy,last_yy,season)
 
    #s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
    s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司名稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
@@ -611,7 +602,6 @@ if not mydoc_code_lists == com_lists :
 
    if not match_row.empty  :
 
-      """
       records = match_row.copy()
       #records.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
       records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA']
@@ -629,8 +619,6 @@ if not mydoc_code_lists == com_lists :
       insert_many_mongo_db('stock','Rep_Stock_Season_Com',records)
       
       time.sleep(1)
-      """
-      pass
    ### data empty & get last season report  
    else : 
       
@@ -649,6 +637,10 @@ else :
    
    #print('else_2:',yy,last_yy,season)
 
+
+
+
+
 ### get last price
 last_modify=get_mongo_last_date()
 #20230807
@@ -660,16 +652,27 @@ date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().str
 ### get  data from DB
 #match_row = pd.DataFrame(list(mydoc_season))
 
+#print(date_sii,date_otc)
+
+
+#mydoc = read_mongo_db('stock','Rep_3_Investors',{"last_modify" : last_modify},{"_id":0,"code" :1, "price":1})
+
+#mydoc = pd.DataFrame(list(mydoc))
+
+
 #if mydoc.empty :
 
 mydoc = Rep_price(date_sii,date_otc,com_lists)
 
-#print(match_row.info())
-#print('price:',mydoc.info())
+
+#print('match_row:',match_row.info())
+#print('mydoc:',mydoc.info())
 
 #match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
-### merge price
+
 match_row_doc = pd.merge(match_row,mydoc, on =['code']) ##dataframe join by column
+#print('match_row_doc:',match_row_doc)
+
 
 match_row_doc.dropna()
 
@@ -697,7 +700,13 @@ if datetime.datetime.today().isoweekday() == 5 :  ## show all company on friday
 
 else :
 
-   match_row = match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['yield_60%']>0)] .copy()
+   match_row_filter = match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['yield_60%']>0)] .copy()
+
+   ### avoid empty of filter
+   if   match_row_filter.empty : 
+
+       match_row = match_row_doc.copy() 
+
 
 
 #print("PE & yield filter:",match_row.info())
@@ -709,6 +718,9 @@ last_sst = "累計盈餘{}_Q{}".format(yy-1,season)
 """
 the_sst = "EPS_{}_Q{}".format(yy,season)
 last_sst = "EPS_{}_Q{}".format(yy-1,season)
+
+
+
 
 
 
@@ -738,8 +750,9 @@ if today.month >=3 :
 
    dfs = pd.DataFrame(list(mydoc_stock_season_diviended))
 
+   #print(df.info())
+   #print(dfs.info())
    dfs =  dfs.astype({'cash_dividend':'float','stock_dividend':'float'})
-   
 
    dfs['cash_dividend'] = dfs['cash_dividend'].round(2)   
    dfs['stock_dividend'] = dfs['stock_dividend'].round(2)   
@@ -775,7 +788,7 @@ else :
    sort_column='PE'
    assc = True
 
-#print(match_row.head())
+
 #match_row=match_row.sort_values(by=['PE'],ascending = True ,ignore_index = True)
 #match_row=match_row.sort_values(by=[sort_column],ascending = assc ,ignore_index = True)
 
@@ -872,7 +885,7 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        #to_date='date_sii'
        #send_mail.send_email('Stock_Eps_Earnning_Yield_{today}_com'.format(today=to_date),body)
        #send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=to_date),body)
-       send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=date_sii),body)
+       send_mail.send_email('Stock_Eps_Yield_PE_{today}_com_Q{s}'.format(today=date_sii,s=season),body)
 else :
     #print(match_row.to_string(index=False))
     #print(match_row.to_html(escape=False))
