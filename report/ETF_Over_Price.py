@@ -1,4 +1,3 @@
-
 #! /usr/bin/env python3.6
 # -*- coding: utf-8 -*-
 
@@ -9,7 +8,8 @@ from datetime import datetime
 import time
 import redis
 import random
-
+from pymongo import MongoClient
+from fake_useragent import UserAgent
 
 
 pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
@@ -26,7 +26,18 @@ def get_redis_data(_key,_type,_field_1,_field_2):
 
     return _list
 
+### mongodb atlas connection
+conn_user = get_redis_data('mongodb_user',"hget","user",'NULL')
+conn_pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
 
+mongourl = 'mongodb+srv://' + conn_user +':' + conn_pwd +'@cluster0.47rpi.gcp.mongodb.net/myFirstDatabase?retryWrites=true&w=majority'
+conn = MongoClient(mongourl)
+
+
+def atlas_read_mongo_db(_db,_collection,dicct,_columns):
+    db = conn[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns)
 
 def send_line_notify(token,msg):
 
@@ -35,6 +46,19 @@ def send_line_notify(token,msg):
     headers={"Authorization": "Bearer " + token},
     data={'message': msg}
     )
+"""
+
+def send_line_notify(token,msg):
+
+    requests.post(
+    url='https://notify-api.line.me/api/notify',
+    headers={"Authorization": "Bearer " + token},
+    data={'message': msg ,
+          stickerPackageId": "446",
+          "stickerId": "1988"}
+    )
+"""
+
 
 
 
@@ -54,46 +78,64 @@ def match_row_5 ( get_updatetime ,match_row,extend) :
 
 
 
-def ETF_Over_Price():
+def ETF_Over_Price(today):
 
-  dfs = pd.DataFrame()
+  code_list =[]
   url = 'https://mis.twse.com.tw/stock/data/all_etf.txt?'
-  code_list =['00891','00892']
+  mydoc = atlas_read_mongo_db('stock','ETF_code',{},{'_id':0,'code':1})
+  mydoc_ETF =  pd.DataFrame(mydoc)
+  code_list = list(mydoc_ETF['code'])
+  user_agent = UserAgent()
+
   dfs =pd.DataFrame()
-  r = requests.get(url)
+  r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
   r.encoding = 'utf8'
-  for idx in [4,8] : ## 中信　／　富邦
-    df = pd.read_json(url)['a1'][idx]['msgArray']
-    df = pd.DataFrame(data=df,columns=['a','b','c','d','e','f','g','h','i','j','k']) 
-    #df['last_modify'] = df['i'] +' '+ df['j']
-    #df =df.loc[:,['a','b','d','e','f','g','last_modify']]
-    df =df.loc[:,['a','b','d','e','f','g']]
-    df = df[df['a'].isin(code_list)]
-    ## stock to /1000 
-    df['d'] = df['d'].astype(str).str.replace(',','').astype(float) ##change type
-    df['d']=round((df['d']/1000),0).astype(int)
-    dfs = pd.concat([dfs,df],ignore_index=True)
-    #dfs.columns = ['code','name','前日買賣','成交價','預估淨值','折溢價%','last_modify']
-  dfs.columns = ['code','name','前日買賣','成交價','預估淨值','折溢價%']
+ 
+  doc = pd.read_json(url)['a1']                                                                       
+  for idx in range(0,len(doc)-1,1) :                                                                  
+                                                                                                      
+    df = pd.DataFrame(data=doc[idx]['msgArray'],columns=['a','b','c','d','e','f','g','h','i','j','k'])
+    df = df[df['a'].isin(code_list)]                                                                  
+                                                                                                      
+    if not df.empty :
+      df['d'] = df['d'].astype(str).str.replace(',','').astype(float) ##change type
+      df['d']=round((df['d']/1000),0).astype(int)
+      dfs = pd.concat([dfs,df],ignore_index=True)                                                     
+                                                                                                      
+  dfs = dfs.loc[:,['a','d','e','f','g']]                                                          
+  
+  dfs.columns = ['code','前日買賣','成交價','預估淨值','折溢價%']
+
+  if today.hour < 18  :
+
+       dfs = dfs[['code','成交價','預估淨值','折溢價%']]
+      
   return dfs
 
 
+today = datetime.now()
 
-match_row=ETF_Over_Price()
+match_row=ETF_Over_Price(today)
+
 
 thread= 0
 
 if not match_row.empty  :
 
-          match_row = match_row.astype({'折溢價%':'float'})
-         
-          skip =0  
+          #match_row = match_row.astype({'折溢價%':'float'})
+          #skip =0  
           for idx in match_row['折溢價%'] :
-              if idx < thread and skip ==0 :
+              if idx == '-' :
+                 idx = 0 
+              else :    
+                 idx = float(idx) 
+              
+              ## 折價 才顯示  
+              if idx < thread :
      
                  get_updatetime = datetime.now().strftime('%Y%m%d %H:%M:%S')
 
                  match_row_5(get_updatetime ,match_row,"\n ")
                   
-                 skip=1
+                 break
 
