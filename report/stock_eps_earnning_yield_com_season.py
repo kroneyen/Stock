@@ -419,12 +419,18 @@ def Reasonable_Price(limit_y) :
 
    last_5years = list(last_5years_doc)[0].get("_id")
    
-
-   #_dicct= [{"$match" :  { "code" : code , "years"  : { "$gte" :last_5years } } } 
+   """
    _dicct= [{"$match" :  { "years"  : { "$gte" :last_5years } } } 
-   #     ,{ "$group" : { "_id" :"$code" , "avg" :{"$avg":"$cash_dividend"} }}
          ,{ "$group" : { "_id" :"$code" , "avg" :{"$avg": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} } }}
         ]
+   """
+   _dicct = [{"$match" :  { "years"  : { "$gte" : last_5years } } }
+           ,{ "$group" : { "_id" : "$code"  , "cash_sum" : { "$sum": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} }  ,
+                     "stock_sum" : { "$sum": { "$cond": [{ "$eq":["$stock_dividend" , float("NaN") ]}, 0, "$stock_dividend"]} }  }    }
+           ,{ "$project" : { "code" : "$_id"  , "avg" : { "$divide": [ "$cash_sum", limit_y ] } 
+                     #,"stock_avg" : { "$divide": [ "$stock_sum", limit_y ] } 
+                    ,"_id" :0  } }]
+
 
    mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct)
 
@@ -691,6 +697,8 @@ match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],
 
 #match_row_doc = pd.merge(match_row_doc,avgg, on =['code']) ##dataframe join by column
 
+#print("PE & yield filter:",match_row.info())
+
 
 ## PE & yield filter
 
@@ -706,7 +714,10 @@ else :
    if   match_row_filter.empty : 
 
        match_row = match_row_doc.copy() 
-
+       #print('if_match_row:', match_row.info())
+   else  : 
+       match_row = match_row_filter.copy() 
+       #print('else_match_row:',match_row.info() )
 
 
 #print("PE & yield filter:",match_row.info())
@@ -721,7 +732,7 @@ last_sst = "EPS_{}_Q{}".format(yy-1,season)
 
 
 
-
+#print(match_row.info())
 
 
 ## defiend columns
@@ -774,7 +785,7 @@ if today.month >=3 :
    r_price["cheap"] = round(r_price['avg']/0.07,2) 
    r_price["seasonable"] = round(r_price['avg']/0.05,2)  
    r_price["expensive"] = round(r_price['avg']/0.03,2)  
-   r_price.rename(columns={"_id":"code"},inplace=True)
+   #r_price.rename(columns={"_id":"code"},inplace=True)
    ### remove avg field
    r_price = r_price.iloc[:,[0,2,3,4]]
 

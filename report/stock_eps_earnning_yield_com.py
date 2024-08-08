@@ -421,15 +421,24 @@ def Reasonable_Price(limit_y) :
    
 
    #_dicct= [{"$match" :  { "code" : code , "years"  : { "$gte" :last_5years } } } 
+   """
    _dicct= [{"$match" :  { "years"  : { "$gte" :last_5years } } } 
-   #     ,{ "$group" : { "_id" :"$code" , "avg" :{"$avg":"$cash_dividend"} }}
          ,{ "$group" : { "_id" :"$code" , "avg" :{"$avg": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} } }}
         ]
+   """
+
+   _dicct = [{"$match" :  { "years"  : { "$gte" : last_5years } } }
+           ,{ "$group" : { "_id" : "$code"  , "cash_sum" : { "$sum": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} }  ,
+                     "stock_sum" : { "$sum": { "$cond": [{ "$eq":["$stock_dividend" , float("NaN") ]}, 0, "$stock_dividend"]} }  }    }
+           ,{ "$project" : { "code" : "$_id"  , "avg" : { "$divide": [ "$cash_sum", limit_y ] } 
+                           #,"stock_avg" : { "$divide": [ "$stock_sum", limit_y ] } 
+                           ,"_id" :0  } } ]
+
 
    mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct)
 
    df = pd.DataFrame(list(mydoc_stock_season))
-
+   ### code	avg	stock_avg
    return df
 
 
@@ -761,7 +770,7 @@ if today.month >=3 :
    r_price["cheap"] = round(r_price['avg']/0.07,2) 
    r_price["seasonable"] = round(r_price['avg']/0.05,2)  
    r_price["expensive"] = round(r_price['avg']/0.03,2)  
-   r_price.rename(columns={"_id":"code"},inplace=True)
+   #r_price.rename(columns={"_id":"code"},inplace=True)
    ### remove avg field
    r_price = r_price.iloc[:,[0,2,3,4]]
 
