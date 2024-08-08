@@ -397,6 +397,10 @@ mydoc = read_mongo_db('stock','Rep_Stock_Season_Com',{'season': s_season , 'year
 
 match_row=pd.DataFrame(list(mydoc))
 #print('match_row_doc:',match_row.info())
+
+
+
+
 if not match_row.empty :
 
    match_row=match_row.sort_values(by=['EPS_g%'],ascending=False,ignore_index = True)
@@ -426,6 +430,13 @@ if not match_row.empty :
 if  time.strftime("%H:%M:%S", time.localtime()) > mail_time :
 
     if not match_row.empty :
+       
+       ## for email
+       the_sst = "EPS_{}_Q{}".format(s_year,s_season)
+       last_sst = "EPS_{}_Q{}".format(int(s_year)-1,season)
+
+       match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
+
        body = match_row.to_html(classes='table table-striped',escape=False)
        #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = yy ,season=season) ,body)
        send_mail.send_email('{year}_stock_Q{season}_report' .format(year = s_year ,season=s_season) ,body)
