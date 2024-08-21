@@ -525,16 +525,9 @@ match_row = div_doc.drop_duplicates(subset=['code', 'cash_dividend','dividend_da
 if not match_row.empty  :
 
       records = match_row.copy()
-      #records.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
-      #records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA']
 
-      #records["season"] = str(season)
       records["years"]  = str(key_yy)
-      #print(str(yy))
-      #print('records:',records.info())
-      #print('records:',records[records['code'] == "2449" ])
       ### rename for mongodb
-      #records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA','season','years']
       records =records.to_dict(orient='records')
       ## coding  bec not include ROE ROA
       #del_filter = {"years":str(yy),"season":str(season)}

@@ -77,14 +77,13 @@ def Dividend(years,date_s,date_d) :
    #df = df.fillna('12/31')
    
   
+   #mask_1 = df['除息日'] > date_s
+   #mask_2 = df['除息日'] < date_d
+   #match_row = df[(mask_1 & mask_2)].sort_values(by=['配息'],ascending = False).sort_values(by=['除息日']).reset_index(drop=True)
+   #return match_row.iloc[:,[0,1,2,3,4,6,7]]
+
    """
-   mask_1 = df['除息日'] > date_s
-   mask_2 = df['除息日'] < date_d
-   match_row = df[(mask_1 & mask_2)].sort_values(by=['配息'],ascending = False).sort_values(by=['除息日']).reset_index(drop=True)
-   return match_row.iloc[:,[0,1,2,3,4,6,7]]
-   """
-   """
-        #match_row = df[df['累計YoY(%)'] > yoy_up] < yoy_do].sort_values(by=['累計YoY(%)'],ascending = False)
+   #match_row = df[df['累計YoY(%)'] > yoy_up] < yoy_do].sort_values(by=['累計YoY(%)'],ascending = False)
    '代號', '公司', '配息', '除息日', '配股', '除權日', '股價', '現金殖利率', '殖利率', '還原殖利率',
        '發息日', '配息率', '董監持股', '3年平均股利', '6年平均股利', '10年平均股利', '10年股利次數', '1QEPS',
        '2QEPS', '3QEPS', '今年累積EPS', '去年EPS', '本益比', '股價淨值比', '多少張以上要繳健保費',
