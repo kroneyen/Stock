@@ -751,24 +751,11 @@ if today.month >=3 :
 
    df_merge=pd.DataFrame()
    
-
-   """ 
    dict_stock_season_div={'years':str(today.year) }
 
    columns_stock_season_div={'_id':0,'years':0,'code_name':0}
 
    mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividind_Com',dict_stock_season_div ,columns_stock_season_div)
-   """
-   _dicct = [{"$match" :  { "years"  : { "$eq" : str(today.year) } } }
-               ,{ "$sort" : {"dividend_date" : 1 , "dividend_stock_date" :1}}
-           ,{ "$group" : { "_id" : "$code"  , "cash_sum" : { "$sum": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} }  ,
-                     "stock_sum" : { "$sum": { "$cond": [{ "$eq":["$stock_dividend" , float("NaN") ]}, 0, "$stock_dividend"]} }  ,
-                        "last_dividend_date" : {"$last" :"$dividend_date"} , "last_dividend_stock_date" : {"$last" :"$dividend_stock_date"}
-                         }    }
-           ,{ "$project" : { "code" : "$_id"  ,"cash_dividend" : "$cash_sum" , "dividend_date" : "$last_dividend_date" ,"stock_dividend" : "$stock_sum" , "dividend_stock_date" : "$last_dividend_stock_date"  ,"_id" :0  } }]
-
-
-   mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct )
 
    df =  match_row.copy()
 
@@ -844,7 +831,7 @@ for idx in list(range(2,17)) :
     elif idx >= 14 and idx <= 16 and today.month >=3:
 
          ## price compare / cheap ,seasonable,expensive
-         compare_data = match_row.iloc[:,[5,10,idx,11,13]].copy()
+         compare_data = match_row.iloc[:,[5,10,idx,11]].copy()
          compare_name = list(compare_data.columns)
          #print(compare_data.info())
          #<p style="background-color:Tomato;">Lorem ipsum...</p>
@@ -876,12 +863,8 @@ for idx in list(range(2,17)) :
             match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
 
             match_row.iloc[:,5] =  compare_data.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' % x[compare_name[0]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[0]],axis=1)
-       
-            ## div_date /div_stock_date
-     
-            match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
             
-            match_row.iloc[:,13] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[4]]  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[4]],axis=1)
+            match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
 
 
 
@@ -891,8 +874,8 @@ for idx in list(range(2,17)) :
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
 
 
-check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div','EPS_g%']
-check_assc = [False,False,False,False,False]
+check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div']
+check_assc = [False,False,False,False]
 
 
 
