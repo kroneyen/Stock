@@ -32,8 +32,8 @@ date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.da
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20240322'
-#date_otc= '113/03/22'
+#date_sii= '20241016'
+#date_otc= '113/10/16'
 
 mail_time = '09:00:00'
 #mail_time = '18:00:00'
@@ -532,7 +532,8 @@ def plot_Rep_Stock_Exchange(match_row) :
 
 
    ### data to int for plot  
-   records = dfs.fillna(0).astype('int64')
+   records = dfs.fillna(0).astype('int64').sort_index()
+   
 
    ### 5 rows for each paint  
    for idx in range(0,len(records.columns),5):
@@ -635,18 +636,14 @@ plot_Rep_Stock_Exchange(match_row.iloc[:,[0,10]])
 match_row['con_days'] = match_row['con_days'].astype('int64')
 
 ### adding nenagive vlues to red
-for  idx in [4,8,10,11,12] :
-    
-    match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+for  idx in [0,4,8,10,11,12] :
 
-    """
-    if idx ==4 or idx==9 :
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
-    elif idx == 12 : 
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if pd.notna(x) and x  > 15  else x)
-    #elif idx == 10 or idx ==11 :
-    #     match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: round(x,0)  if pd.notna(x)  else x)
-    """
+    if idx == 0 :
+
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+    
+    else :    
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 
 
 
