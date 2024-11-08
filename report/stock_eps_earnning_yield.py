@@ -103,6 +103,13 @@ def delete_many_mongo_db(_db,_collection,_values):
     collection.delete_many(_values)
 
 
+def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns).sort(_sort).limit(1)
+
+
+
 ### mongodb atlas connection
 user = get_redis_data('mongodb_user',"hget","user",'NULL')
 pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
@@ -490,7 +497,8 @@ match_row= pd.DataFrame(list(mydoc_season))
 ### empty
 #if len(list(chk_season)) == 0   : 
 if match_row.empty   : 
-
+    
+    """ 
     if  season == 1   : ## crossover years
 
                 season = 4
@@ -499,6 +507,16 @@ if match_row.empty   :
                  season = season -1
    
     yy =  today.year -1
+    """
+
+    _sort=[("years",-1) ,("season" , -1)]
+
+    get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years" : 1,"season":1},_sort)
+
+    for idx in get_last_data :
+        season = int(idx.get('season'))
+        yy = int(idx.get('years'))
+
 
      
     mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season),"code" :  {"$in" : com_lists}},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
@@ -665,10 +683,16 @@ plot_Stock_Eps_Yield_PE_Season(season,yy,com_lists)
 #print(match_row.head())
 
 
-for idx in list(range(2,17)) :
+#for idx in list(range(2,17)) :
+for idx in list(range(0,17)) :
     #if idx == 4 or idx == 6:
+    ## code
+    if idx == 0 :
 
-    if idx == 4 :
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+
+
+    elif idx == 4 :
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
 
     ## 'yield_60%' , 'yield%'
@@ -691,7 +715,7 @@ for idx in list(range(2,17)) :
     #elif idx >= 14 and idx <= 15 and today.month >=3:
     elif idx >= 14 and idx <= 16 and today.month >=3:
 
-         ## price compare / cheap ,seasonable,expensive
+         ## code ,price compare / cheap ,seasonable,expensive
          compare_data = match_row.iloc[:,[5,10,idx,11,13]].copy()
          compare_name = list(compare_data.columns)
          #print(compare_data.info())
@@ -719,6 +743,7 @@ for idx in list(range(2,17)) :
          #if idx == 15 : 
          if idx == 16 : 
 
+            
             match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
 
             match_row.iloc[:,5] =  compare_data.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' % x[compare_name[0]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[0]],axis=1)
@@ -730,8 +755,13 @@ for idx in list(range(2,17)) :
             match_row.iloc[:,13] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[4]]  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[4]],axis=1)         
 
 
+
+
     else :
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+
+         if idx > 1:
+
+            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
 
 
 check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div']
@@ -752,5 +782,5 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        send_mail.send_email('Stock_Eps_Yield_PE_{today}'.format(today=date_sii),body)
 else :
     #print(match_row.to_string(index=False))
-    #print(match_row.to_html(escape=False))
-    print(match_row)
+    print(match_row.to_html(escape=False))
+    #print(match_row)
