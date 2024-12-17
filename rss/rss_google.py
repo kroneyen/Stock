@@ -178,6 +178,14 @@ def send_line_notify(token,msg):
     )
 
 
+def send_tg_bot_msg(token,chat_id,msg):
+
+  #url = f"https://api.telegram.org/bot{'+token+'}/sendMessage?chat_id={'+chat_id}&text={msg}&parse_mode=HTML"
+  url = "https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}&parse_mode=HTML".format(token = token ,chat_id=chat_id,msg=msg)
+  requests.get(url)
+
+
+
 
 def delete_redis_data(today):
 
@@ -444,14 +452,24 @@ https://cn.wsj.com/zh-hant
 #if not match_row.empty and  time.strftime("%H:%M:%S", time.localtime()) < notify_time :
 if not match_row.empty  :
           line_key_list =[]
+          tg_key_list=[]
+          tg_chat_id=[]
           ##line_key_list.append(get_redis_data('line_key','lrange_head','2')) ## for rss_google
           line_key_list.append(get_redis_data('line_key_hset','hget','rss_google','NULL')) ## for rss_google of signle
+          tg_key_list.append(get_redis_data('tg_bot_hset','hget','@stock_broadcast_2024bot','NULL')) ## for rss_google of signle
+          tg_chat_id.append(get_redis_data('tg_chat_id','hget','stock_broadcast','NULL')) ## for rss_google of signle
           
           for match_row_index in range(0,len(match_row),5) :
               
               msg = "\n " + match_row.iloc[match_row_index:match_row_index+5,:].to_string(index = False)  ## for line notify msg 1000  character limit 
+              tg_msg ="【rss_google】  "+ "\n" + msg
 
               ### for multiple line group
               for line_key in  line_key_list : ## 
                   send_line_notify(line_key,msg)
                   time.sleep(random.randrange(1, 3, 1))
+
+              for tg_key in  tg_key_list : ## 
+                  send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)                  
+                  time.sleep(random.randrange(1, 3, 1))
+
