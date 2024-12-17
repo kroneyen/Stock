@@ -47,14 +47,16 @@ conn = MongoClient(mongourl)
 
 
 
-def insert_mongo_db(_conn,_db,_collection,_values):
+def insert_many_mongo_db(_conn,_db,_collection,_values):
     if _conn == 'c' :
       db = c[_db] ## database
-    elif _conn == 'conn': 
+    elif _conn == 'conn':
       db = conn[_db] ## database
 
     collection = db[_collection] ## collection 
-    collection.insert(_values)
+    collection.insert_many(_values)
+
+
 
 
 def drop_mongo_db(_conn,_db,_collection):
@@ -200,6 +202,7 @@ drop_mongo_db('conn','stock','com_lists')
 time.sleep(random.randrange(1, 3, 1))
 
 #auth_stock_count = 0 
+_values_lists=[]
 
 for index in range(len(com_lists)) : 
    # print(str(df.iloc[index,0])+' "' +str(df.iloc[index,1])+'" ',str(df.iloc[index:0])+'_p "'+str(df.iloc[index:2])+'"')
@@ -209,38 +212,25 @@ for index in range(len(com_lists)) :
    #print('got data:',auth_stock_data)
    #_values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'type' : str(com_lists.iloc[index,2]),'last_modify':datetime.now() }
    _values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'auth_stock' : str(com_lists.iloc[index,2]),'type' : str(com_lists.iloc[index,3]),'last_modify':datetime.now() }
+   _values_lists.append(_values)
+
    
-   _index= IndexModel([('code',1),('type',1)],name='code_type' , unique=True ,background=True )
-   
-   insert_mongo_db('c','stock','com_lists',_values)
-  
-   #time.sleep(random.randrange(1, 3, 1))
+### insert data to local mongodb & altas mogodb    
+insert_many_mongo_db('c','stock','com_lists',_values_lists)
+insert_many_mongo_db('conn','stock','com_lists',_values_lists)
 
-   insert_mongo_db('conn','stock','com_lists',_values)
 
-   #time.sleep(random.randrange(1, 3, 1))
+com_list_index= IndexModel([('code',1)],name='code_1' , unique=True ,background=True )
+com_lists_index= IndexModel([('code',1),('type',1)],name='code_type' , unique=True ,background=True )
 
-   createIndex_mongo_db('c','stock','com_lists',_index)
+### add index for com_list
+createIndex_mongo_db('c','stock','com_list',com_list_index)
+createIndex_mongo_db('conn','stock','com_list',com_list_index)
 
-   createIndex_mongo_db('conn','stock','com_lists',_index)
+### add index for com_lists
+createIndex_mongo_db('c','stock','com_lists',com_lists_index)
+createIndex_mongo_db('conn','stock','com_lists',com_lists_index)
 
-"""
-   auth_stock_count  += 1
-   
-   if auth_stock_count % 10 == 0 : 
-
-      print('wating sleep 15~30 sce !!')
-      time.sleep(random.randrange(15, 30, 1))
-
-   elif  auth_stock_count % 5 == 0 :
-
-      print('wating sleep 1 ~5 sce !!')
-      time.sleep(random.randrange(1, 5, 1))
-"""
-
-#mydoc = read_mongo_db('stock','com_lists')
-
-#dictt = {'code':'1268'}
 
 dictt = {}
 _columns= {"code": 1,"name": 1,"auth_stock":1,"type":1,"_id": 0}
