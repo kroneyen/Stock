@@ -98,7 +98,7 @@ def monthly_report():
      url_1 ='https://mops.twse.com.tw/nas/t21/otc/t21sc03_' + str(report_day.year - 1911) + '_' + str(report_day.month) +'_0.html'
      today_week = datetime.date.today().strftime("%w")
      #mail_time = "21:00:00"
-    
+     
      user_agent = UserAgent() 
      url_list = [url,url_1]
      df_report = pd.DataFrame()
@@ -195,34 +195,42 @@ def Plot_Rep_Stock_Month(report,report_day) :
 
 report ,report_day = monthly_report()
 
-Plot_Rep_Stock_Month(report,report_day)
-
-
-#report = report.to_markdown(index= 0)
-#report = report.to_html()
-#report = tableize(report)
-#print(report_day)
-for idx in list(range(2, 8)) :
-    if idx == 4 or  idx == 7 :
-       #report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
-       report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
-
-
-#print(report.style.render())
 mail_month =str(report_day.month)
+#print('report:',report)
+#print('report_day:',report_day)
+mail_date =  datetime.date.today()
 
 
 if not report.empty :
+
+    Plot_Rep_Stock_Month(report,report_day)
+
+
+    #for idx in list(range(0, 8)) :
+    for idx in [0,4,7] :
+        if idx == 4 or  idx == 7 :
+           #report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
+           report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+
+        elif idx == 0 :
+           
+           report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<a href="https://tw.stock.yahoo.com/quote/%s/revenue" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+
+
 
     if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        body = report.to_html(escape=False)
        #print('body:',body)
        #send_mail.send_email('stock_month_report',body)
-       send_mail.send_email('Stock_Month_%s_Report' % mail_month ,body)
+       #send_mail.send_email('Stock_Month_%s_Report' % mail_month ,body)
+       send_mail.send_email('Stock_Month_{month}_Report_{date}'.format(month=mail_month, date=mail_date),body)
 
     else :
       report = report.to_markdown(index= 0)
       #print(report.to_string(index=False))
       print('stock_month_%s_report' % mail_month)
       print(report)
+
+else :
+      print('stock_month_%s_report not result' % mail_month)
  
