@@ -93,6 +93,12 @@ def read_mongo_db(_db,_collection,dicct,_columns):
     collection = db[_collection] ## collection 
     return collection.find(dicct,_columns)
 
+def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns).sort(_sort).limit(50)
+
+
 
 def read_aggregate_mongo_db(_db,_collection,dicct):
     db = c[_db] ## database
@@ -235,9 +241,10 @@ def Dividend_goodinfo(years) :
     web.get(url)
     time.sleep(random.randrange(3, 5, 1))
 
-    html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/table/tbody/tr/td/div/form/nobr[4]/input[2]'
+    #html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/table/tbody/tr/td/div/form/nobr[4]/input[2]'
+    html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr/td/div/form/nobr[4]/input[2]'
     ### download file
-    file_download = WebDriverWait(web, 5).until(EC.element_to_be_clickable((By.XPATH,html_d)))
+    file_download = WebDriverWait(web, 30).until(EC.element_to_be_clickable((By.XPATH,html_d)))
     file_download.click()
     time.sleep(random.randrange(10, 15, 1))
 
@@ -305,7 +312,7 @@ def Dividend_goodinfo(years) :
 
     _values = { "_id" :0 , "code" :1 }
 
-    mydoc = atlas_read_mongo_db('stock','Rep_Stock_dividind_Com',_dictt,_values)
+    mydoc = read_mongo_db('stock','Rep_Stock_dividind_Com',_dictt,_values)
 
     df_mydoc = pd.DataFrame(list(mydoc))
 
@@ -473,6 +480,7 @@ except :
 #yy = year
 
 key_yy=str(today.year)
+#key_yy='2021'
 
 #div_data = Dividend(yy,com_lists)
 
@@ -542,5 +550,37 @@ if not match_row.empty  :
       ### doublecheck from twse
 
       #Dividend_twse()
-  
 
+
+
+### Mail Report Dividind Coming 
+
+_dividend_date = today.strftime('%m/%d')
+mail_date = today.strftime('%Y%m%d')
+
+
+_dictt = { "years" : str(key_yy),"dividend_date" : {"$gte": _dividend_date}}
+
+_values = { "_id" :0 }
+
+_sort=[("dividend_date",1)]
+
+mydoc = read_mongo_db_sort_limit('stock','Rep_Stock_dividind_Com',_dictt,_values,_sort)
+
+match_row = pd.DataFrame(list(mydoc))
+  
+#if not match_row.empty and time.strftime("%H:%M:%S", time.localtime()) > mail_time :
+if not match_row.empty :
+
+       for  idx in [0,2,4] :
+
+            if idx in [2,4]:
+
+               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x < 5  else f'<font color="red">+%s</font>' % x if x >=10 else x)
+
+            elif idx == 0 :
+
+               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/dividend-policy/ex-dividend" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+       
+       body = match_row.to_html(classes='table table-striped',escape=False)
+       send_mail.send_email('Stock_Dividind_Coming_{today}'.format(today=mail_date),body)
