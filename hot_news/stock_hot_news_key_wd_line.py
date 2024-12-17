@@ -11,6 +11,9 @@ import json
 import re
 #import line_notify
 import random
+from fake_useragent import UserAgent
+
+
 
 url ='https://mops.twse.com.tw/mops/web/t05sr01_1'
 ##new_windwos =https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1
@@ -101,7 +104,7 @@ def reurl_API(link_list,_key):
         for link in link_list :
 
             uurl = link.split('href="')[1].split('">')[0]
-            print('uurl:',uurl)
+            #print('uurl:',uurl)
             s_data = {"url": uurl}
             r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
 
@@ -122,12 +125,11 @@ def reurl_API(link_list,_key):
         for link in link_list :
 
             uurl = link.split('href="')[1].split('">')[0]
-            print('uurl:',uurl)
+            #print('uurl:',uurl)
             s_reurl = 'https://ssur.cc/api.php?'
             s_data = {"format": "json" , "appkey": reurl_api_key ,"longurl" : uurl}
       
             r = requests.post(s_reurl, data= s_data  ).json()
-            print()
             try :
                   rerul_link = r["ae_url"]
             except :
@@ -181,25 +183,36 @@ def send_line_notify(token,msg):
     )
 
 
+def send_tg_bot_msg(token,chat_id,msg):
+
+  url = "https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}&parse_mode=HTML".format(token = token ,chat_id=chat_id,msg=msg)
+  requests.get(url)
+
 
 
 
 def  hot_new_key_wd(url,today):  
-     pd.options.display.max_rows = 200
-     pd.options.display.max_columns = 200
-     pd.options.display.max_colwidth = 200 
-    
-     r = requests.post(url)
+     #pd.options.display.max_rows = 200
+     #pd.options.display.max_columns = 200
+     #pd.options.display.max_colwidth = 200 
+
+     user_agent = UserAgent()   
+     #r = requests.post(url)
+     r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
      r.encoding = 'utf8'    
      
      soup = BeautifulSoup(r.text, 'html.parser')
-     link = soup.find_all('input',attrs={"value": "詳細資料"})
-     df = pd.read_html(r.text)[7]
-     df_8 = pd.read_html(r.text)[8]
-     if not df_8.empty :
-       df_8.columns=['公司代號', '公司簡稱', '發言日期', '發言時間', '主旨', 'Unnamed: 5']
-       df = pd.concat([df,df_8])
+     try : 
+         link = soup.find_all('input',attrs={"value": "詳細資料"})
+         df = pd.read_html(r.text)[7]
+         df_8 = pd.read_html(r.text)[8]
+
+         if not df_8.empty :
+            df_8.columns=['公司代號', '公司簡稱', '發言日期', '發言時間', '主旨', 'Unnamed: 5']
+            df = pd.concat([df,df_8])
      
+     except : 
+       return {}           
 
      link_list = []
      skey_list = []   
@@ -260,9 +273,12 @@ def  hot_new_key_wd(url,today):
        #insert_redis_data('skey_lists',match_row['skey_lists'].values) 
        line_display_list = insert_redis_data(rediskeys,match_row['skey_lists'].values)     
        line_key_list=[]
-       #line_key = get_redis_data("line_key") 
-       #line_key_list = get_redis_data("line_key","lrange",0,-1) 
+       tg_key_list=[]
+       tg_chat_id=[]
        line_key_list.append( get_redis_data('line_key_hset','hget','Stock_YoY','NULL'))  ## use signle line key
+       tg_key_list.append(get_redis_data('tg_bot_hset','hget','@stock_broadcast_2024bot','NULL')) ## for tg_bot of signle
+       tg_chat_id.append(get_redis_data('tg_chat_id','hget','stock_broadcast','NULL')) ## for tg_bot of signle
+
        ## check new array 
 
        match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)].copy() ### new arrary
@@ -283,6 +299,8 @@ def  hot_new_key_wd(url,today):
           
               ### for line notify msg 1000  character limit 
               msg = "\n " + match_row_line_notify.iloc[match_row_index:match_row_index+5,:].to_string(index = False)   
+              tg_msg ="【Stock_NEWS】 "+ "\n" + msg
+ 
               ### for multiple line group
               #for line_key in  range(len(line_key_list)-3) : ## Stock_YoY[0]/Stock[1]/rss_google[2]
               #for line_key in  range(len(line_key_list)) : 
@@ -290,7 +308,10 @@ def  hot_new_key_wd(url,today):
               for line_key in  line_key_list : ##
                   send_line_notify(line_key, msg)   
                   time.sleep(random.randrange(1, 3, 1))
-                  #time.sleep(round(random.uniform(0.5, 1.0), 10))
+
+              for tg_key in  tg_key_list : ## 
+                  send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)
+                  time.sleep(random.randrange(1, 3, 1))
 
        
      else : 
@@ -298,8 +319,7 @@ def  hot_new_key_wd(url,today):
            print(match_row_line_notify)
 
 
-     return match_row_line_notify
+     #return match_row_line_notify
      
 
 hot_new_key_wd(url,today)
-
