@@ -17,6 +17,7 @@ import seaborn as sns
 from matplotlib.font_manager import fontManager
 from fake_useragent import UserAgent
 import del_png
+import random
 
 
 
@@ -29,7 +30,7 @@ mpl.rc('font', family='Taipei Sans TC Beta')
 
 
 
-user_agent = UserAgent()
+#user_agent = UserAgent()
 
 #mail_time = "18:00:00"
 mail_time = "09:00:00"
@@ -153,12 +154,13 @@ def drop_mongo_db(_db,_collection):
     collection.drop()
 
 
-
+"""
 def read_mongo_db(_db,_collection,dicct):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
     #return collection.find({_code:_qq},{"code":1,"name":0,"_id":0,"last_modify":0})
     return collection.find(dicct,{"code": 1,"name": 1,"_id": 0})
+"""
 
 def read_mongo_db(_db,_collection,dicct,_columns):
     db = c[_db] ## database
@@ -194,7 +196,7 @@ def read_aggregate_mongo_db(_db,_collection,dicct):
 
 def Rep_3_Investors(date_sii,date_otc,com_lists) : 
 
-
+  user_agent = UserAgent()
 
   #url_sii ='https://www.twse.com.tw/fund/T86?response=html&date='+ date_sii +'&selectType=ALL'
   url_sii ='https://www.twse.com.tw/rwd/zh/fund/T86?response=html&date='+ date_sii +'&selectType=ALL'
@@ -206,10 +208,24 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
   #com_lists = get_redis_data("com_list") ## get  redis data
   
   for url in url_list :
-     
+
      r = requests.get(url , headers={ 'user-agent': user_agent.random }) 
      r.encoding = 'utf8'
-     df = pd.read_html(r.text,thousands=",")[0]
+     #df = pd.read_html(r.text,thousands=",",timeout=1)[0]
+     #r = requests.get(url)                             
+     #r.encoding = 'utf8'                                         
+     if r.status_code == 200 :                                   
+       
+       ### try to solve No tables found
+       try :                                                     
+          #df = pd.read_html(io.StringIO(r.text),thousands=",")[0]
+          df = pd.read_html(r.text,thousands=",")[0]
+       except :                                                  
+                                                                 
+          time.sleep(random.randrange(30, 60, 10))                  
+          #df = pd.read_html(io.StringIO(r.text),thousands=",")[0]
+          df = pd.read_html(r.text,thousands=",")[0]
+
      df_len = len(df.columns)
      df.columns= llist(len(df.columns)) ##編列columns
      
@@ -231,10 +247,11 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
      dfs = pd.concat([dfs,df],ignore_index=True) ##合併
           
      time.sleep(1)
+     #time.sleep(random.randrange(1, 3, 1))
      u_index += 1
 
   
-
+  dfs = dfs.fillna(0) ### 20251206 fix NaN bug
   dfs = dfs.astype({2:'int64',3:'int64',4:'int64',5:'int64'}) ##change type
 
   dfs[2] =round((dfs[2]/1000),0).astype(int)
@@ -261,9 +278,12 @@ def Rep_price(date_sii,date_otc,com_lists):
        
        url_list = [url_sii,url_otc]
        
+       user_agent = UserAgent()
+
        u_index = 0
        dfs = pd.DataFrame()
        for url in url_list :
+              
               r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
               r.encoding = 'utf8'
               if u_index == 0 :
@@ -408,8 +428,6 @@ if chk == False :
 
 time.sleep(1)
 
-#records =records.to_dict(orient='records')
-#insert_many_mongo_db('stock','Rep_3_Investors',records)
 
 ### sync local mongo & redis data of com_list
 
@@ -619,17 +637,19 @@ plot_Rep_3_Investors_price(match_row.iloc[:,[0,9]])
 match_row['con_days'] = match_row['con_days'].astype('int64')
 
 
-for  idx in range(2,11,1) :
-
+for  idx in range(0,11,1) :
     
     #if idx ==9 :	
     if idx in [5,7,8,9,10]:
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x  if x >0  else f'<font color="red">%s</font>' % x if x < 0 else 0 )
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x if x >=5  else f'<font color="red">%dday</font>' % x if x < 0 else 0 )
-    #elif  idx == 10:
-    #	   match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x if x >= 10 else f'<font color="red">%dday</font>' % x if x < 0 else 0 )	
-    elif idx != 6:
+    elif idx == 0 :
+
+         #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+       
+    elif idx not in [1,6]:
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if x < 0 else str(x))
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
 
