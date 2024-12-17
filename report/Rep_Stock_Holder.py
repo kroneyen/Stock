@@ -26,7 +26,7 @@ mpl.rc('font', family='Taipei Sans TC Beta')
 
 
 
-#mail_time = '10:00:00'
+#mail_time = '18:00:00'
 mail_time = '09:00:00'
 
 ### redis connection & data 
@@ -267,10 +267,10 @@ def plot_Rep_Stock_Holder_code() :
       cal_day = date_lists[len(date_lists)-1]   ## get first day 
       last_day = date_lists[0] ## get last day
 
-     # print('last_day:',last_day)
       ### get all code & name  of last day 
       
-      last_day_dicct = [ {'$match':  { 'last_modify' : last_day } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ]
+      #last_day_dicct = [ {'$match':  { 'last_modify' : last_day } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ]
+      last_day_dicct = [ {'$match':  { 'last_modify' : last_day } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ,{'$sort' : {"_id" : 1 }}]
    
       mydoc = read_aggregate_mongo_db('stock','Rep_Stock_Exchange',last_day_dicct)
   
@@ -281,16 +281,14 @@ def plot_Rep_Stock_Holder_code() :
 
          ex_last_day = get_mongo_cal_date(1,'Rep_Stock_Exchange')
 
-         last_day_dicct = [ {'$match':  { 'last_modify' : ex_last_day[0] } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ]
+         #last_day_dicct = [ {'$match':  { 'last_modify' : ex_last_day[0] } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ]
+         last_day_dicct = [ {'$match':  { 'last_modify' : ex_last_day[0] } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ,{'$sort' : {"_id" : 1 }}]
 
          mydoc = read_aggregate_mongo_db('stock','Rep_Stock_Exchange',last_day_dicct)
 
          last_day_df = pd.DataFrame(list(mydoc))
 
 
-
-              
-      #print('last_day_df:',last_day_df.info())
        
       ### list of com & name 
       com_lists=[]
@@ -300,7 +298,6 @@ def plot_Rep_Stock_Holder_code() :
           com_lists.append(idx.get('code')) 
           name_lists.append(idx.get('name')) 
      
-      
       name_idx = 0 
       plot_data_df = pd.DataFrame()
    
@@ -330,7 +327,6 @@ def plot_Rep_Stock_Holder_code() :
          df['code'] = code_list      
    
          
-         
          #### df to pivot for mail table
          pivot_df = df.pivot(index='code', columns='date', values='sum_percentage')
          rest_df = pivot_df.copy()
@@ -340,6 +336,7 @@ def plot_Rep_Stock_Holder_code() :
          rest_df.insert(3,'level_min',level_min ,True)
          rest_df.insert(4,'hold(up)',level_stock ,True)
          
+
          dfs = pd.concat([dfs,rest_df],axis=0,ignore_index=True) 
    
    
@@ -347,7 +344,7 @@ def plot_Rep_Stock_Holder_code() :
          df['date'] = df['date'].astype('str')      
          plot_data = pd.DataFrame(data = df['sum_percentage'].values,columns=[com_lists[name_idx]+'_'+name_lists[name_idx]] , index=df['date'])
          plot_data_df =  pd.concat([plot_data_df,plot_data],axis=1)      
-         
+
    
          name_idx +=1
 
@@ -365,13 +362,33 @@ def plot_Rep_Stock_Holder_code() :
         
          dfs[str(dfs.columns[idx+5]) + '%'] = round((dfs.iloc[:,idx+5] - dfs.iloc[:,idx+4])/ dfs.iloc[:,idx+4] *100 ,2)
    
-      ## sort columns   
+      ## resort columns   
       dfs = dfs.iloc[:,[0,1,2,3,4,5,6,11,7,12,8,13,9,14,10,15]].fillna(0)
+      dfs = dfs.sort_values(by=dfs.columns[15],ascending=False,ignore_index=True)
+      """
+      plot_data_df = dfs.iloc
+      
+      df['date'] = df['date'].astype('str')
+      plot_data = pd.DataFrame(data = df['sum_percentage'].values,columns=[com_lists[name_idx]+'_'+name_lists[name_idx]] , index=df['date'])
+      plot_data_df =  pd.concat([plot_data_df,plot_data],axis=1)
+      """
+      plot_data_match=[]
+
+      #print('code:', dfs['code']) 
+
+      for idx in range(0,len(dfs['code']),1) :
+        plot_data_match.append(dfs.iloc[idx,0]+'_'+dfs.iloc[idx,1])
+       
+      #print(plot_data_match)    
+
+      plot_data_df=plot_data_df[plot_data_match]
+
    
       ######### sum_percentage  for plot set ########
       records = plot_data_df.fillna(0).astype('float64')
       #match_row = match_row.sort_values(by=['houseage','price'],ignore_index = True)
-   
+      #print('record:',records.head(10))
+      #records = records.sort_values(by=dfs.columns[0] ,ascending=False , inplace=True) 
       for idx in range(0,len(records.columns),5):
       
          idx_records = records.iloc[ : , idx:idx+5 ]
@@ -428,9 +445,15 @@ match_row , last_day =  plot_Rep_Stock_Holder_code()
 
 
 ### adding nenagive % vlues to red 
-for  idx in [7,9,11,13,15] :
+for  idx in [0,7,9,11,13,15] :
+    
+    if idx == 0 : 
 
-    match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+       #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://norway.twsthr.info/StockHolders.aspx?stock=%s" target="_blank">%s</a>' %(x ,x)  if int(x) >0  else  x)
+
+    else :
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 
 
 
