@@ -92,6 +92,14 @@ def delete_many_mongo_db(_db,_collection,_values):
     collection.delete_many(_values)
 
 
+def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns).sort(_sort).limit(1)
+
+
+
+
 ### mongodb atlas connection
 user = get_redis_data('mongodb_user',"hget","user",'NULL')
 pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
@@ -551,17 +559,17 @@ if not mydoc_code_lists == com_lists :
 
    except :  ### if no data  get last season
 
-          if  season == 1   and the_year.empty : ## crossover years
-
-                season = 4
-                #last_yy  =   today.year -2
-                #yy =  today.year -1
-                
-          else :        
-                 season = season -1
-
-          last_yy  =   today.year -2
-          yy =  today.year -1
+          #read_mongo_db_limit(_db,_collection,dicct,_columns,sort_col,limit_cnt)
+          _sort=[("years",-1) ,("season" , -1)]
+  
+          get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years" : 1,"season":1},_sort)
+  
+          for idx in get_last_data :
+              season = int(idx.get('season'))
+              yy = int(idx.get('years'))
+  
+  
+          last_yy = yy  - 1
 
           
           last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
@@ -592,16 +600,14 @@ if not mydoc_code_lists == com_lists :
 
    except :
 
-        if  season == 1  and the_year.empty  : ## crossover years
+        #read_mongo_db_limit(_db,_collection,dicct,_columns,sort_col,limit_cnt)
+        _sort=[("years",-1) ,("season" , -1)]
 
-                season = 4
-                #last_yy  =   today.year -2
-                #yy =  today.year -1
+        get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years" : 1,"season":1},_sort)
 
-        else :
-                 season = season -1
-
-        yy =  today.year -1
+        for idx in get_last_data :
+            season = int(idx.get('season'))
+            yy = int(idx.get('years'))
 
 
         match_row_roe = stock_season_roa_roe( yy, season, com_lists)
@@ -673,8 +679,6 @@ date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().str
 
 mydoc = Rep_price(date_sii,date_otc,com_lists)
 
-#print(match_row.info())
-#print('price:',mydoc.info())
 
 #match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
 ### merge price
@@ -803,9 +807,12 @@ else :
 
 
 ### for mail 
-for idx in list(range(2,17)) :
-    #if idx == 4 or idx == 6:
-    if idx == 4 :
+for idx in list(range(0,17)) :
+    ## code
+    if idx == 0 :
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+
+    elif idx == 4 :
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
     ## 'yield_60%' , 'yield%'
     elif idx == 6 :
@@ -869,7 +876,10 @@ for idx in list(range(2,17)) :
     
 
     else :
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+
+         if idx > 1:
+
+            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
 
 
 check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div']
