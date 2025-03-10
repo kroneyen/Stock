@@ -15,7 +15,7 @@ from fake_useragent import UserAgent
 
 
 
-url ='https://mops.twse.com.tw/mops/web/t05sr01_1'
+url ='https://mopsov.twse.com.tw/mops/web/t05sr01_1'
 ##new_windwos =https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1
 #&SEQ_NO=1&SPOKE_TIME=145909&SPOKE_DATE=20210331&COMPANY_ID=6173&skey=6173202103311&firstin=true
 today = datetime.date.today()
@@ -186,8 +186,15 @@ def send_line_notify(token,msg):
 def send_tg_bot_msg(token,chat_id,msg):
 
   url = "https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}&parse_mode=HTML".format(token = token ,chat_id=chat_id,msg=msg)
-  requests.get(url)
 
+  try : 
+
+     requests.get(url)
+
+  except : 
+  
+     time.sleep(random.random()) ### 0~1 num
+     requests.get(url)
 
 
 
@@ -227,7 +234,8 @@ def  hot_new_key_wd(url,today):
         SPOKE_DATE = sttr[2].split('=')[1]
         COMPANY_ID = sttr[3].split('=')[1]
         SKEY = sttr[4].split('=')[1]
-        llink = '<a href="'+ ('https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1&SEQ_NO='+SEQ_NO\
+        #llink = '<a href="'+ ('https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1&SEQ_NO='+SEQ_NO\
+        llink = '<a href="'+ ( url + '?TYPEK=all&step=1&SEQ_NO='+SEQ_NO\
         +'&SPOKE_TIME='+SPOKE_TIME+'&SPOKE_DATE='+SPOKE_DATE+'&COMPANY_ID='+COMPANY_ID+'&skey='+SKEY+'&firstin=true')\
         .replace("'","")+ '">' + '詳細資料</a>'
         
@@ -236,7 +244,8 @@ def  hot_new_key_wd(url,today):
            COMPANY_ID = sttr[1].split('=')[1]
            SKEY = sttr[2].split('=')[1]
            SPOKE_DATE = sttr[3].split('=')[1]
-           llink = '<a href="'+ ('https://mops.twse.com.tw/mops/web/ajax_t59sb01?firstin=true&co_id='+ COMPANY_ID\
+           #llink = '<a href="'+ ('https://mopsov.twse.com.tw/mops/web/ajax_t59sb01?firstin=true&co_id='+ COMPANY_ID\
+           llink = '<a href="'+ ( url + '?firstin=true&co_id='+ COMPANY_ID\
            + '&TYPEK=all&YEAR=' + str(today.year - 1911) + '&MONTH='+ str(today.month) + '&SDAY='+SPOKE_DATE+'&EDAY='+SPOKE_DATE\
            +'&DATE1='+ SPOKE_DATE + '&SKEY='+ SKEY +'&step=2b').replace("'","")+ '">' + '詳細資料</a>'
         
@@ -300,14 +309,19 @@ def  hot_new_key_wd(url,today):
               ### for line notify msg 1000  character limit 
               msg = "\n " + match_row_line_notify.iloc[match_row_index:match_row_index+5,:].to_string(index = False)   
               tg_msg ="【Stock_NEWS】 "+ "\n" + msg
- 
+              deadline_check = datetime.date.today().strftime("%Y-%m-%d") 
               ### for multiple line group
               #for line_key in  range(len(line_key_list)-3) : ## Stock_YoY[0]/Stock[1]/rss_google[2]
               #for line_key in  range(len(line_key_list)) : 
                   #send_line_notify(line_key_list[line_key],msg) 
-              for line_key in  line_key_list : ##
-                  send_line_notify(line_key, msg)   
-                  time.sleep(random.randrange(1, 3, 1))
+             
+              ### line notify colse on '2025-03-31'
+              deadline_check = datetime.date.today().strftime("%Y-%m-%d")
+              if  deadline_check <= '2025-03-31' : 
+ 
+                  for line_key in  line_key_list : ##
+                      send_line_notify(line_key, msg)   
+                      time.sleep(random.randrange(1, 3, 1))
 
               for tg_key in  tg_key_list : ## 
                   send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)

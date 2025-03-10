@@ -10,7 +10,6 @@ from bs4 import BeautifulSoup
 import logging
 import send_mail
 import redis
-import line_notify
 import requests
 from fake_useragent import UserAgent
 import del_png
@@ -25,7 +24,8 @@ del_png.del_images()
 
 
 ##hot news 
-url ='https://mops.twse.com.tw/mops/web/t05sr01_1'
+#url ='https://mops.twse.com.tw/mops/web/t05sr01_1'
+url='https://mopsov.twse.com.tw/mops/web/t05sr01_1' ##改版 舊版
 ##new_windwos =https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1
 #&SEQ_NO=1&SPOKE_TIME=145909&SPOKE_DATE=20210331&COMPANY_ID=6173&skey=6173202103311&firstin=true
 today_week = datetime.date.today().strftime("%w")
@@ -78,7 +78,8 @@ def  hot_new_detail(url,today):
         SPOKE_DATE = sttr[2].split('=')[1]
         COMPANY_ID = sttr[3].split('=')[1]
         skey = sttr[4].split('=')[1]
-        llink = '<a href="'+ ('https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1&SEQ_NO='+SEQ_NO\
+        #llink = '<a href="'+ ('https://mops.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1&SEQ_NO='+SEQ_NO\
+        llink = '<a href="'+ ('https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1?TYPEK=all&step=1&SEQ_NO='+SEQ_NO\
         +'&SPOKE_TIME='+SPOKE_TIME+'&SPOKE_DATE='+SPOKE_DATE+'&COMPANY_ID='+COMPANY_ID+'&skey='+skey+'&firstin=true')\
         .replace("'","")+ '">' + '詳細資料</a>'
       
@@ -117,8 +118,8 @@ if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
     if not match_row.empty :
        body = match_row.to_html(escape=False)
        #log_date = datetime.date.today().strftime("%Y-%m-%d")
-       send_mail.send_email('stock_hot_news_link_%s' % today ,body)
-else :
-    print(match_row.to_string(index=False))
+       send_mail.send_email('Stock_Hot_News_Link_%s' % today ,body)
+#else :
+#    print(match_row.to_string(index=False))
 
 
