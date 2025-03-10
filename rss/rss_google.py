@@ -178,11 +178,19 @@ def send_line_notify(token,msg):
     )
 
 
+
 def send_tg_bot_msg(token,chat_id,msg):
 
   #url = f"https://api.telegram.org/bot{'+token+'}/sendMessage?chat_id={'+chat_id}&text={msg}&parse_mode=HTML"
   url = "https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}&parse_mode=HTML".format(token = token ,chat_id=chat_id,msg=msg)
-  requests.get(url)
+
+  try :
+       requests.get(url)
+
+  except :
+       time.sleep(random.random()) ### 0~1 num   
+       requests.get(url)
+
 
 
 
@@ -465,11 +473,17 @@ if not match_row.empty  :
               tg_msg ="【rss_google】  "+ "\n" + msg
 
               ### for multiple line group
-              for line_key in  line_key_list : ## 
-                  send_line_notify(line_key,msg)
-                  time.sleep(random.randrange(1, 3, 1))
+              ### line notify colse on '2025-03-31'
+              deadline_check = datetime.date.today().strftime("%Y-%m-%d")
+              if  deadline_check <= '2025-03-31' :
+
+                  for line_key in  line_key_list : ##
+                      send_line_notify(line_key, msg)
+                      time.sleep(random.randrange(1, 3, 1))
 
               for tg_key in  tg_key_list : ## 
                   send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)                  
                   time.sleep(random.randrange(1, 3, 1))
+
+
 
