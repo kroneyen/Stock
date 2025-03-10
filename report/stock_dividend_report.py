@@ -151,7 +151,6 @@ def get_mongo_last_date(cal_day):
 
   idx_date = idx.get("_id")
 
- #set_date = str(idx_date)
  return str(idx_date)
 
 
@@ -190,7 +189,6 @@ def Dividend(year,com_lists) :
     url ='https://stock.wespai.com/rate'+str(year-1911)
     ### goodinfo
     ## sii / otc   
-    ## https://goodinfo.tw/tw/StockDividendPolicyList.asp?MARKET_CAT=%E4%B8%8A%E5%B8%82&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024 
     ## https://goodinfo.tw/tw/StockDividendPolicyList.asp?MARKET_CAT=%E4%B8%8A%E6%AB%83&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024
     ## https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR=2024
     ##    url_1 = 'https://mops.twse.com.tw/mops/web/ajax_t05st09_2?encodeURIComponent=1&step=1&firstin=1&off=1&isnew=0&co_id='
@@ -218,25 +216,13 @@ def Dividend_goodinfo(years) :
 
 
     url = 'https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR='+str(years)
-
-    #url = 'https://histock.tw/stock/dividend.aspx'
-    #url_html = './Dividend_file/'+years+'_SaleMonDetail.html'
-    #old = '/content/Dividend_file/SaleMonDetail.html'
-    #file_html = '/content/Dividend_file/'+years+'_SaleMonDetail.html'
+    
+    ### save Dividend_file path
     old = './Dividend_file/SaleMonDetail.html'
     file_html = './Dividend_file/'+str(years)+'_SaleMonDetail.html'
 
-
-
-    #prefs = {"download.default_directory":"/content"};
-
-    # 偽瀏覽器
-    #headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/ 89.0.4389.82 Safari/537.36'}
-
-    #r = requests.get(url, headers= headers)
-    #r.encoding = 'utf-8'
-
-    #time.sleep(random.randrange(1, 2, 1))
+    
+    start = time.time()
 
     web.get(url)
     time.sleep(random.randrange(3, 5, 1))
@@ -244,47 +230,24 @@ def Dividend_goodinfo(years) :
     #html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/table/tbody/tr/td/div/form/nobr[4]/input[2]'
     html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr/td/div/form/nobr[4]/input[2]'
     ### download file
-    file_download = WebDriverWait(web, 30).until(EC.element_to_be_clickable((By.XPATH,html_d)))
+    file_download = WebDriverWait(web, 10).until(EC.element_to_be_clickable((By.XPATH,html_d)))
     file_download.click()
-    time.sleep(random.randrange(10, 15, 1))
+
+    if  os.path.exists(old) :
+        pass
+
+    else : 
+       time.sleep(random.randrange(5, 10, 1))
+       #print('need to waiting')
 
     os.rename(old, file_html)
-    #df = pd.read_html('SaleMonDetail.html') ## []list to pandas
-  
-    #url_html = years + '_SaleMonDetail.html'
+    #print(f"time: {time.time() - start} (s)")
 
     df = pd.read_html(file_html)[0] ## []list to pandas
-
-    #print(df.info())
-
-
+    ### Filter columns
     dfs = df.iloc[:,[1,2,15,4,18,9]]
     dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date']
  
-
-    def checked(x,y) :
-
-      try:
-        if float(x) > 0 :
-          return y
-        else :
-          return np.nan
-
-      except:
-        return np.nan
-
-    def dividend_checked(x) :
-
-      try:
-        if float(x) > 0 :
-          return x
-        else :
-          return 0
-
-      except:
-        return 0
-
-
 
     #year = "'"+ url_html.split("_")[0][2:4] +"/"
     year = "'"+ str(years)[2:4] +"/"
@@ -474,7 +437,7 @@ except :
 
 
 
-###main code
+### main code
 
 #year=2024
 #yy = year
@@ -492,7 +455,7 @@ div_data = Dividend_goodinfo(key_yy)
 
 
 div_data.columns= llist(len(div_data.columns))
-div_data = div_data.iloc[:,[0,2,3,4,5]]
+div_data = div_data.iloc[:,[0,2,3,4,5]].copy()
 div_data.rename(columns={0: 'code', 2:'cash_dividend',3: 'dividend_date',4: 'stock_dividend',5:'dividend_stock_date'}, inplace=True)
 
 #div_data['cash_dividend'] = div_data.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
@@ -576,7 +539,8 @@ if not match_row.empty :
 
             if idx in [2,4]:
 
-               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x < 5  else f'<font color="red">+%s</font>' % x if x >=10 else x)
+               #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % round(x,3)   if x < 5  else f'<font color="red">+%s</font>' % round(x,3)  if x >=10 else  round(x,3))
+               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % round(x,3)   if x < 5  else f'<p style="background-color:Aqua;">%s</p>' % round(x,3)  if x >=10 else  f'<font color="red">+%s</font>' % round(x,3))
 
             elif idx == 0 :
 

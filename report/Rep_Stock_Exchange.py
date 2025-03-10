@@ -32,8 +32,8 @@ date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.da
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20241016'
-#date_otc= '113/10/16'
+#date_sii= '20250219'
+#date_otc= '114/02/19'
 
 mail_time = '09:00:00'
 #mail_time = '18:00:00'
@@ -557,6 +557,31 @@ def plot_Rep_Stock_Exchange(match_row) :
      plt.clf()
 
 
+
+def Bias_Rate(cal): 
+
+    set_date = get_mongo_last_date(cal)
+
+  
+    dictt =  [ {"$match": { "last_modify" : { "$gte" : set_date } }}  ,
+            {"$group":{"_id": "$code"  ,"avg_price" : { "$avg" : { "$toDecimal": "$price"} } ,"last_price" : {"$last":"$price"} }}
+          ]
+      
+    mydoc = read_aggregate_mongo_db('stock','Rep_Stock_Exchange',dictt)
+
+    df = pd.DataFrame(list(mydoc))
+    ### decimal128 to float
+    df = df.astype({"avg_price": "string"})
+    df = df.astype({"avg_price": "float" ,"last_price": "float"})
+    ### adding Bias_rate
+    col_name = 'Bias_'+str(cal)
+    df[col_name] = df.apply(lambda x : round(round((x['last_price'] - x['avg_price']) / x['avg_price'] ,4 ) * 100 , 2) if x['avg_price'] > 0 else x['avg_price'] ,axis=1 )
+    #df.columns=["code","avg_price","last_price",'Bias'] 
+    df = df.iloc[:,[0,3]]
+    df.columns=["code",col_name]
+    return df ,col_name
+
+
 ### del images/*.png
 del_png.del_images()
 
@@ -573,9 +598,21 @@ com_lists=[]
 for idx in mydoc :
  com_lists.append(idx.get('code'))
 
+try :
+
+    df_Rep_Stock_Exchange = Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists)
+
+except : 
+
+    last_modify=get_mongo_last_date(1)
+    date_sii = last_modify
+    date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('%Y')) - 1911)  + datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('/%m/%d')
+
+    df_Rep_Stock_Exchange = Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists)
+    
 
 
-df_Rep_Stock_Exchange = Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists)
+
 ### define columns name
 df_Rep_Stock_Exchange.columns = ['code','name','lending','back','lending_balance','price','selling_short','selling_short_back','be_selling_short_balance','selling_short_balance']
 ### add 借券差/借券賣出餘額差額
@@ -612,6 +649,8 @@ if chk == False :
 time.sleep(1)
 
 
+
+
 #### merge cal_con_day data
 
 df_cal_con_days = cal_con_days('stock','Rep_Stock_Exchange')
@@ -622,12 +661,22 @@ match_row = pd.merge(match_row,df_cal_con_days, on =['code']) ##dataframe join b
 
 ### add continue_selling_short_balance_total% = 連續total_values/借券賣出餘額  %
 match_row['continue_selling_short_balance_total']= round(round(match_row['total_values']/match_row['selling_short_balance'],4)*100 ,2) 
+
+###20250220 add Bias_Rate using 10 day SMA 
+
+df_bias , col_bias = Bias_Rate(10)
+match_row = pd.merge(match_row,df_bias,how='left',on =['code'])
+#match_row['Bias'] = match_row.apply(lambda x : round(round((x['price'] - float(str(x['avg_price']))) / float(str(x['avg_price'])) ,4 ) * 100 , 2) if float(str(x['avg_price'])) > 0 else x['avg_price'] ,axis=1 )
+
+
+#print('match_row_661:',match_row.info())
 ##get column
-match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5]] 
-match_row.columns =['代號','名稱','借券','還券','借券差','借券差餘額','借券賣出','借券賣出還券','借券賣出餘額差','借券賣出餘額','con_days','total_values','連續天總額%(+)','收盤價']
+match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5,15]] 
+match_row.columns =['代號','名稱','借券','還券','借券差','借券差餘額','借券賣出','借券賣出還券','借券賣出餘額差','借券賣出餘額','con_days','total_values','連續天總額%(+)','收盤價',col_bias]
 match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False ,ignore_index = True)
 
 
+#print('match_row_667:',match_row.info())
 ### plot Rep_Stock_Exchange for line 
 ## code , con_days%
 plot_Rep_Stock_Exchange(match_row.iloc[:,[0,10]])
@@ -636,14 +685,20 @@ plot_Rep_Stock_Exchange(match_row.iloc[:,[0,10]])
 match_row['con_days'] = match_row['con_days'].astype('int64')
 
 ### adding nenagive vlues to red
-for  idx in [0,4,8,10,11,12] :
+for  idx in [0,4,8,10,11,12,14] :
 
     if idx == 0 :
 
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/ShowMarginChart.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
     
-    else :    
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+    elif idx == 12 :    
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s%s</font>' % (x ,' %') if x > 0 else  f'<font color="green">%s%s</font>' % (x,' %' ) )
+
+    elif idx == 14 :
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s%s</font>' % (str(x) ,' %') if float(str(x)) > 10 else  f'<font color="green">%s%s</font>' % (str(x),' %')  if float(str(x)) < -10  else  str(x)+' %'  )
+  
+    else : 
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % (x ) if x > 0 else  f'<font color="green">%s</font>' % (x ) )
 
 
 

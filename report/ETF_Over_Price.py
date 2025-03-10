@@ -46,36 +46,52 @@ def send_line_notify(token,msg):
     headers={"Authorization": "Bearer " + token},
     data={'message': msg}
     )
-"""
 
-def send_line_notify(token,msg):
 
-    requests.post(
-    url='https://notify-api.line.me/api/notify',
-    headers={"Authorization": "Bearer " + token},
-    data={'message': msg ,
-          stickerPackageId": "446",
-          "stickerId": "1988"}
-    )
-"""
+def send_tg_bot_msg(token,chat_id,msg):
 
+  #url = f"https://api.telegram.org/bot{'+token+'}/sendMessage?chat_id={'+chat_id}&text={msg}&parse_mode=HTML"
+  url = "https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={msg}&parse_mode=HTML".format(token = token ,chat_id=chat_id,msg=msg)
+  
+  try :
+       requests.get(url)
+
+  except :
+       time.sleep(random.random()) ### 0~1 num   
+       requests.get(url) 
+  
 
 
 
 def match_row_5 ( get_updatetime ,match_row,extend) :
 
           line_key_list =[]
+          tg_key_list=[]
+          tg_chat_id=[]
+
           line_key_list.append( get_redis_data('line_key_hset','hget','Stock_ETF','NULL')) ## for exchange_rate (Stock_YoY/Stock/rss_google/Exchange_Rate)
+          tg_key_list.append(get_redis_data('tg_bot_hset','hget','@stock_broadcast_2024bot','NULL')) ## for rss_google of signle
+          tg_chat_id.append(get_redis_data('tg_chat_id','hget','stock_broadcast','NULL')) ## for rss_google of signle
+
+
           for match_row_index in range(0,len(match_row),5) :
               #msg = get_updatetime + "  " ## for line br
               #msg = get_updatetime  +"\n " + match_row.iloc[match_row_index:match_row_index+5,:].to_string(index = False)  ## for line notify msg 1000  character limit 
               msg = get_updatetime + extend  + match_row.iloc[match_row_index:match_row_index+5,:].to_string(index = False)  ## for line notify msg 1000  character limit 
+              tg_msg ="【Stock_ETF】 "+ "\n" + msg
 
               ### for multiple line group
-              for line_key in  line_key_list : ## 
-                  send_line_notify(line_key, msg)
-                  time.sleep(random.randrange(1, 3, 1))
+              deadline_check = datetime.today().strftime("%Y-%m-%d")
+              if  deadline_check <= '2025-03-31' :
 
+                  for line_key in  line_key_list : ##
+                      send_line_notify(line_key, msg)
+                      time.sleep(random.randrange(1, 3, 1))
+
+
+              for tg_key in  tg_key_list : ## 
+                  send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)               
+                  time.sleep(random.random())
 
 
 def ETF_Over_Price(today):
@@ -106,9 +122,6 @@ def ETF_Over_Price(today):
   
   dfs.columns = ['code','前日買賣','成交價','預估淨值','折溢價%']
 
-  if today.hour < 18  :
-
-       dfs = dfs[['code','成交價','預估淨值','折溢價%']]
       
   return dfs
 
@@ -118,13 +131,32 @@ today = datetime.now()
 match_row=ETF_Over_Price(today)
 
 
-thread= 0
+if today.hour < 18  :
 
+        match_row = match_row[['code','成交價','預估淨值','折溢價%']]
+
+        ## 只顯示折價 
+        #match_row['折溢價%'] = match_row['折溢價%'].apply(lambda x: float(0) if x == '-'  else float(x)  )
+        try :
+             match_row['折溢價%'] = match_row['折溢價%'].apply(lambda x: 0 if (x == '-'  or x == '--' or x == '') else float(x)  )
+             #match_row['折溢價%'] = match_row['折溢價%'].apply(lambda x: float(x)  if  float(x)  else  0 )
+
+        except :        
+               print('debug:', match_row)
+
+        match_row = match_row[match_row['折溢價%'] < 0 ]
+        
+      
 if not match_row.empty  :
 
-          #match_row = match_row.astype({'折溢價%':'float'})
-          #skip =0  
-          for idx in match_row['折溢價%'] :
+    get_updatetime = datetime.now().strftime('%Y%m%d %H:%M:%S')
+    
+    match_row = match_row.sort_values(by=['折溢價%'])
+
+    match_row_5(get_updatetime ,match_row,"\n ")
+
+    """
+    for idx in match_row['折溢價%'] :
               if idx == '-' :
                  idx = 0 
               else :    
@@ -138,4 +170,6 @@ if not match_row.empty  :
                  match_row_5(get_updatetime ,match_row,"\n ")
                   
                  break
+    """ 
 
+          
