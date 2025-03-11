@@ -12,6 +12,20 @@ from pymongo import MongoClient
 from fake_useragent import UserAgent
 import del_png
 import re
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.font_manager import fontManager
+
+
+# 改style要在改font之前
+plt.style.use('seaborn')
+fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
+mpl.rc('font', family='Taipei Sans TC Beta')
+
+
+
+
 
 ### del images/*.png
 del_png.del_images()
@@ -92,6 +106,14 @@ def delete_many_mongo_db(_db,_collection,_values):
     collection.delete_many(_values)
 
 
+def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
+    db = c[_db] ## database
+    collection = db[_collection] ## collection 
+    return collection.find(dicct,_columns).sort(_sort).limit(1)
+
+
+
+
 ### mongodb atlas connection
 user = get_redis_data('mongodb_user',"hget","user",'NULL')
 pwd = get_redis_data('mongodb_user',"hget","pwd",'NULL')
@@ -104,9 +126,9 @@ def atlas_read_mongo_db(_db,_collection,dicct,_columns):
     return collection.find(dicct,_columns)
 
 
-def get_mongo_last_date():
+def get_mongo_last_date(cal_day):
  ### mongo query for last ? days
- dictt_set = [ {"$group": { "_id" : { "$toInt" : "$last_modify" } }} , {"$sort" : {"_id" :-1}} , { "$limit" : 1},{"$sort" : {"_id" :1}} , { "$limit" :1}]
+ dictt_set = [ {"$group": { "_id" : { "$toInt" : "$last_modify" } }} , {"$sort" : {"_id" :-1}} , { "$limit" : cal_day},{"$sort" : {"_id" :1}} , { "$limit" :1}]
 
  ### mongo dict data
 
@@ -122,14 +144,16 @@ def get_mongo_last_date():
 
 
 
-
 def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     #pd.options.display.max_rows = 3000
     #pd.options.display.max_columns 
     #pd.options.display.max_colwidth = 200 
 
-    url_sii = 'https://mops.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=sii&year='+ str(year-1911)  +'&season='+ str(season)
-    url_otc = 'https://mops.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=otc&year='+ str(year-1911)  +'&season='+ str(season)    
+    #url_sii = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=sii&year='+ str(year-1911)  +'&season='+ str(season)
+    #url_otc = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=otc&year='+ str(year-1911)  +'&season='+ str(season)    
+    url_sii = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=sii&year='+ str(year-1911)  +'&season='+ str(season)
+    url_otc = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=otc&year='+ str(year-1911)  +'&season='+ str(season)    
+    
     url_list =[url_sii,url_otc]
     #type_list=['sii','otc']    
      
@@ -237,14 +261,15 @@ def stock_season_roa_roe(year, season, com_lists):
     dfs_a =  pd.DataFrame()
     df_merge =  pd.DataFrame()
 
-    url_list = ['https://mops.twse.com.tw/mops/web/ajax_t163sb04','https://mops.twse.com.tw/mops/web/ajax_t163sb05']
+    url_list = ['https://mopsov.twse.com.tw/mops/web/ajax_t163sb04','https://mopsov.twse.com.tw/mops/web/ajax_t163sb05']
 
 
     typek=['sii','otc']
-
+    
+    """
     headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1\
   0_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5304.107 Safari/537.36'}
-
+    """
     #r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
     #print('url:',url)
 
@@ -266,7 +291,8 @@ def stock_season_roa_roe(year, season, com_lists):
 
        ##print('payload:',payload)
        dfs = pd.DataFrame()
-       r =  requests.post(url ,params=payload ,  headers=headers)
+       #r =  requests.post(url ,params=payload ,  headers=headers)
+       r =  requests.post(url ,params=payload ,  headers={ 'user-agent': user_agent.random })
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -407,10 +433,168 @@ def stock_season_roa_roe(year, season, com_lists):
     return df_merge
 
 
+def cal_con_days(_db,_collection):
+
+    set_date=[]
+    cal_day =1
+    limit_day = 60
+
+    dictt_30day = [ {"$group": { "_id" : { "$toInt": "$last_modify" } }} , {"$sort" : {"_id" :-1}} , {"$limit" : limit_day}]
+    mydoc_30day = read_aggregate_mongo_db(_db,_collection,dictt_30day)
+
+    ### get 30 day date in mongo data                                                                                                                                                            
+    for idx in mydoc_30day :
+
+      set_date.append(str(idx.get('_id')))
+
+    ### last days to check                                                                                                                                      
+    dictt_gt = [ {"$match": { "last_modify" : { "$gte" : str(set_date[0]) }  , "$expr" : { "$gt": [ { "$toInt": "$total" }, 0 ] }   }}  ,
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" :1}  }}  ,
+              {"$match": {"sum_coun" : { "$gte": 1 } } } ,  {"$sort" : {"total_values" : -1}}  ]
+
+    dictt_lt = [ {"$match": { "last_modify" : { "$gte" : str(set_date[0]) }  , "$expr" : { "$lt": [ { "$toInt": "$total" }, 0 ] }   }}  ,
+                 {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" : 1}  }}  ,
+              {"$match": {"sum_coun" : { "$gte": 1 } } } ,  {"$sort" : {"total_values" : -1}}  ]
+
+
+    mydoc_gt = read_aggregate_mongo_db(_db,_collection,dictt_gt)
+    mydoc_lt = read_aggregate_mongo_db(_db,_collection,dictt_lt)
+
+    df_cal_gt = pd.DataFrame(list(mydoc_gt))
+    df_cal_lt = pd.DataFrame(list(mydoc_lt))
+
+    cal_data_gt = pd.DataFrame()
+    cal_data_lt = pd.DataFrame()
+
+
+    ### last day data merge cal_data                                                                                                                            
+    cal_data_gt = pd.concat([cal_data_gt,df_cal_gt ], axis=0)
+    cal_data_lt = pd.concat([cal_data_lt,df_cal_lt ], axis=0)
+
+
+
+    while ((not df_cal_gt.empty) or (not df_cal_lt.empty)) and cal_day < len(set_date):
+
+
+      dictt_gt = [ {"$match": { "last_modify" : { "$gte" : set_date[cal_day] }  , "$expr" : { "$gt": [ { "$toInt": "$total" }, 0 ] }   }}  ,
+              {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" :1}  }}  ,
+              {"$match": {"sum_coun" : { "$gte": cal_day+1 } } } ,  {"$sort" : {"total_values" : -1}}  ]
+
+
+      dictt_lt = [ {"$match": { "last_modify" : { "$gte" : set_date[cal_day] }  , "$expr" : { "$lt": [ { "$toInt": "$total" }, 0 ] }   }}  ,
+                 {"$group":{"_id": "$code"  ,"total_values" : { "$sum" : { "$toInt": "$total"} } , "sum_coun" : { "$sum" : 1}  }}  ,
+              {"$match": {"sum_coun" : { "$gte": cal_day+1 } } } ,  {"$sort" : {"total_values" : -1}}  ]
+
+      mydoc_gt = read_aggregate_mongo_db(_db,_collection,dictt_gt)
+      mydoc_lt = read_aggregate_mongo_db(_db,_collection,dictt_lt)
+
+      df_cal_gt = pd.DataFrame(list(mydoc_gt))
+
+      if  not df_cal_gt.empty :
+
+            cal_data_gt = pd.merge(cal_data_gt,df_cal_gt,on = ['_id'],how='left')
+
+            cal_data_gt['total_values'] = cal_data_gt.apply(lambda x: x['total_values_y'] if (pd.notnull(x['total_values_y'])) else x['total_values_x'],axis=1)
+            cal_data_gt['sum_coun'] = cal_data_gt.apply(lambda x: x['sum_coun_y'] if (pd.notnull(x['sum_coun_y'])) else x['sum_coun_x'],axis=1)
+            cal_data_gt = cal_data_gt.drop(['total_values_x','sum_coun_x','total_values_y','sum_coun_y'],axis='columns')
+
+
+      df_cal_lt = pd.DataFrame(list(mydoc_lt))
+
+      if  not df_cal_lt.empty :
+
+           cal_data_lt = pd.merge(cal_data_lt,df_cal_lt,on = ['_id'],how='left')
+
+           cal_data_lt['total_values'] = cal_data_lt.apply(lambda x: x['total_values_y'] if (pd.notnull(x['total_values_y'])) else x['total_values_x'],axis=1)
+           cal_data_lt['sum_coun'] = cal_data_lt.apply(lambda x: x['sum_coun_y'] if (pd.notnull(x['sum_coun_y'])) else x['sum_coun_x'],axis=1)
+           cal_data_lt = cal_data_lt.drop(['total_values_x','sum_coun_x','total_values_y','sum_coun_y'],axis='columns')
+
+
+      cal_day = cal_day + 1
+
+    ### merge data                                                                                                                                         
+    cal_dayy = pd.concat([cal_data_gt,cal_data_lt])
+
+    cal_dayy['sum_coun'] = cal_dayy.apply(lambda  x: -x['sum_coun'] if x['total_values'] < 0  else x['sum_coun'],axis=1)
+
+    cal_dayy.columns=['code','total_values','con_days']
+
+
+    return cal_dayy.sort_values(by='code',ascending=True,ignore_index= True)
+
+
+
+
+def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
+
+     dfs = pd.DataFrame()
+     dfs_Investors = pd.DataFrame()
+     df_cal_day_conti = cal_con_days('stock','Rep_3_Investors')  ## code     total_values    con_days
+     cal_day = df_cal_day_conti.iloc[:,[2]].astype('int64').abs().max()
+     last_modify = get_mongo_last_date(int(cal_day[0]))
+     dfs_merge = pd.DataFrame()
+
+     for idx in com_list :
+
+         altas_mydoc_Season = read_mongo_db('stock','Rep_Stock_Season_Com',{'code': idx ,'season': str(season) , "years" : str(year)  },{'_id':0})
+         ### get price
+         altas_mydoc_Investors = read_mongo_db('stock','Rep_3_Investors',{'code': idx ,"last_modify" : {"$gte" : last_modify}},{'_id':0 ,'code':1 ,'price':1 , 'last_modify':1})
+
+
+         df = pd.DataFrame(list(altas_mydoc_Season))
+
+         df_Investors = pd.DataFrame(list(altas_mydoc_Investors))
+         df_Investors.dropna()
+
+         if not df.empty :
+
+            rest_the_year_df = df.iloc[:,[0,1,2,5,6]].copy()
+
+            dfs = pd.concat([dfs,rest_the_year_df],axis=0)
+
+            dfs_Investors = pd.concat([dfs_Investors,df_Investors],axis=0)
+
+     dfs['x_code']= dfs.apply(lambda x: x['code']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
+     ### drop nan column
+     dfs.dropna(axis='columns')
+     ### merge   
+     df_merge = pd.merge(dfs_Investors,dfs, on = ['code'],how='left')
+
+     df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if pd.notnull(x['price']) else  round(float(x['price']) / float(x['the_year']),2),axis =1  )
+     ### select column 
+     df_merge = df_merge.iloc[:,[1,7,8]]
+     df_merge=df_merge.sort_values(by=['PE'],ascending = True,ignore_index = True)
+     #df_merge['PE'] = df_merge['PE'].fillna(0)
+
+     ### povit table 
+     #records = df_merge.pivot(index='last_modify', columns='x_code', values='PE',fill_value=0)
+     records = pd.pivot_table(df_merge, index='last_modify', columns='x_code', values='PE',fill_value=0)
+
+
+     for idx in range(0,len(records.columns),5):
+
+          idx_records = records.iloc[ : , idx:idx+5 ]
+
+          ax = idx_records.plot(y = idx_records.columns)
+          ## 顯示數據
+          for line, name in zip(ax.lines, idx_records.columns):
+             y = line.get_ydata()[-1]
+             ax.annotate(name, xy=(1,y), xytext=(4,0), color=line.get_color(),
+                    xycoords = ax.get_yaxis_transform(), textcoords="offset points",
+                    size=10, va="center")
+
+          plt.title("Stock_PE_Rate")
+          plt.xlabel("Date")
+          plt.ylabel("PE")
+          #plt.show()
+          plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
+          plt.clf()
+
+
+
 
 def Reasonable_Price(limit_y) :
 
-   #_dicct = [ {"$group" : { "_id" :"$years"}  } , {"$sort" :{"_id" : 1}}, {"$limit" : 1} ]
    _dicct = [ {"$group" : { "_id" :"$years"}  } , {"$limit" : limit_y },{"$sort" :{"_id" : 1}}, {"$limit" : 1} ]
 
 
@@ -418,46 +602,91 @@ def Reasonable_Price(limit_y) :
    last_5years_doc = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct ) 
 
    last_5years = list(last_5years_doc)[0].get("_id")
-   
-   """
-   _dicct= [{"$match" :  { "years"  : { "$gte" :last_5years } } } 
-         ,{ "$group" : { "_id" :"$code" , "avg" :{"$avg": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} } }}
-        ]
-   """
+
+
    _dicct = [{"$match" :  { "years"  : { "$gte" : last_5years } } }
            ,{ "$group" : { "_id" : "$code"  , "cash_sum" : { "$sum": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} }  ,
                      "stock_sum" : { "$sum": { "$cond": [{ "$eq":["$stock_dividend" , float("NaN") ]}, 0, "$stock_dividend"]} }  }    }
            ,{ "$project" : { "code" : "$_id"  , "avg" : { "$divide": [ "$cash_sum", limit_y ] } 
-                     #,"stock_avg" : { "$divide": [ "$stock_sum", limit_y ] } 
-                    ,"_id" :0  } }]
+                           #,"stock_avg" : { "$divide": [ "$stock_sum", limit_y ] } 
+                           ,"_id" :0  } } ]
 
 
    mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct)
 
    df = pd.DataFrame(list(mydoc_stock_season))
-
+   ### code	avg	stock_avg
    return df
 
+
+def get_last_year_season(season):
+
+  _sort = [("_id",-1)]
+
+  if  season == 'undefined' :
+
+     mydoc_season = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years":1,"season":1},_sort)
+
+  else :
+
+     mydoc_season = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{"season":str(season)},{"_id":0,"years":1,"season":1},_sort)
+
+  for idx in mydoc_season :
+      season = int(idx.get('season'))
+      years = int(idx.get('years'))
+
+  return years ,season
+
+
+
+def compare_row(row):
+  
+  rows=[]
+  for idx in range(1,len(row)) :
+    
+    #print(row.iloc[idx] ,row.iloc[0] )
+    if (float(row.iloc[idx]) > float(row.iloc[0])) :
+      
+      if  idx==1 :
+        p_stype= f'<p style="background-color:Lime;">%s</p>'
+                  
+      elif idx==2 :  
+        p_stype= f'<p style="background-color:Aqua;">%s</p>'
+     
+      elif idx==3 :  
+        p_stype= f'<p style="background-color:Tomato;">%s</p>'
+
+      
+      idx_p_stype =  p_stype % row.iloc[0] 
+      rows.append(idx_p_stype)
+     
+    
+    elif idx==3 and rows ==[] : 
+       idx_p_stype = row.iloc[0]
+       rows.append(idx_p_stype)
+
+  
+    if not rows ==[] :
+      break
+
+  return rows[0]
 
 
 
 ###  5/15,8/14,11/14,3/31
 
 today = datetime.date.today()
-
 if today.month >= 4 and today.month<= 6 :
   season = 1
 elif  today.month >= 7 and today.month<= 9 :
-  season = 2 
+  season = 2
 
 elif  today.month >= 10 and today.month<= 12 :
   season = 3
 
 else :
-  season = 4 
+  season = 4
 
-
-s_df = pd.DataFrame()
 
 ###  season cal 
 if season == 4  :
@@ -470,44 +699,61 @@ else :
 
 
 
-### get atlas mongodb data 
+#### get com_lists
+
+com_lists = []
+com_list = []
 
 try :
 
   ### got mongo data from atlas
   dictt = {}
   _columns= {"code":1,"_id":0}
-  com_lists = []
 
+  #mydoc = atlas_read_mongo_db('stock','com_list',dictt,_columns)
   mydoc = atlas_read_mongo_db('stock','com_lists',dictt,_columns)
 
   for idx in mydoc :
     com_lists.append(idx.get('code'))
 
+  mydoc = atlas_read_mongo_db('stock','com_list',dictt,_columns)
+
+  for idx in mydoc :
+    com_list.append(idx.get('code'))
+
+
 except :
    ### got redis data from local
    redis_lists = get_redis_data("com_lists","hkeys",'NULL','NULL') ## get  redis data
-
    for  idx in redis_lists :
-        if not re.match("(\w+_p$)", idx) :  
+        if not re.match("(\w+_p$)", idx) :
            com_lists.append(idx)
 
 
+   com_list = get_redis_data("com_list","lrange",0,-1) ## get  redis data
 
+
+##20250103
+##yy=2024,last_yy=2023,season=4
 
 
 ### get season data from mongo
 
 mydoc_code_lists=[]
 
+#print('yy:',yy , 'season:',season)
+
+### compare season report & com_lists  count
 
 mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
 
 if len(list(mydoc_season)) == 0  and season >1:
+    
+    ### get last_year_season
+    yy ,season = get_last_year_season(season)
+    last_yy = yy  - 1
 
-    season = season -1
     mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
-
 
 
 for idx in mydoc_season :
@@ -517,15 +763,16 @@ for idx in mydoc_season :
 mydoc_code_lists.sort()
 com_lists.sort()
 
-#print("mydoc_code_lists:",len(mydoc_code_lists))
-#print("com_lists:",len(com_lists))
 ### compare mydoc_code_lists & com_lists
 the_year = pd.DataFrame()
+last_year = pd.DataFrame()
 
-### no get data again
 
- 
+### not get data again 
+
+### Update season report
 if not mydoc_code_lists == com_lists :
+   #print('614_yy:',yy , 'season:',season)
 
    try :
 
@@ -535,35 +782,34 @@ if not mydoc_code_lists == com_lists :
 
         the_year = stock_season_report(yy ,season,'undefined','undefined',com_lists)  ## the year season
  
-        #print('try 1:',yy,last_yy,season)
 
    except :  ### if no data  get last season
+          """
+          #read_mongo_db_limit(_db,_collection,dicct,_columns,sort_col,limit_cnt)
+          _sort=[("years",-1) ,("season" , -1)]
+  
+          #get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{"season":"4"},{"_id":0,"years" : 1,"season":1},_sort)
+          get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years" : 1,"season":1},_sort)
+  
+          for idx in get_last_data :
+              season = int(idx.get('season'))
+              yy = int(idx.get('years'))
+          """
+          yy ,season = get_last_year_season(season)
+  
 
-          if  season == 1   and the_year.empty : ## crossover years
+          last_yy = yy  - 1
 
-                season = 4
-                #last_yy  =   today.year -2
-                #yy =  today.year -1
-                
-          else :        
-                 season = season -1
-
-          last_yy  =   today.year -2
-          yy =  today.year -1
-
-          
           last_year = stock_season_report( last_yy ,season ,'undefined','undefined',com_lists)  ## last year season
           
           time.sleep(1)
           
           the_year = stock_season_report( yy ,season ,'undefined','undefined',com_lists)  ## the year season 
 
-          #print('except_else 1:',yy,last_yy,season)
-
+  # print('650_yy:',yy , 'season:',season)
    #s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司簡稱'],suffixes=('_%s' % str(today.year) , '_%s' % str(today.year -1))).copy() ## merge 2021_Q3 & 2020_Q3 
    s_df = the_year.merge(last_year, how='inner', on=['公司代號','公司名稱'],suffixes=('_%s' % str(yy) , '_%s' % str(last_yy))).copy() ## merge 2021_Q3 & 2020_Q3 
 
-   #print('s_df:',s_df)
    #### (累計EPS / 去年累計EPS - 1) * 100% 
 
    s_df['EPS_g%'] = (( (s_df.iloc[:,2] - (s_df.iloc[:,3]))/ (s_df.iloc[:,3]).abs() ) * 100 ).round(2) ## 計算成長% (2021- 2020) /2020 * 100%
@@ -573,41 +819,39 @@ if not mydoc_code_lists == com_lists :
 
    ### main code  stock_season_roa_roe
 
-
    try :
 
         match_row_roe = stock_season_roa_roe(yy, season, com_lists)
 
    except :
+        """
+        #read_mongo_db_limit(_db,_collection,dicct,_columns,sort_col,limit_cnt)
+        _sort=[("years",-1) ,("season" , -1)]
 
-        if  season == 1  and the_year.empty  : ## crossover years
+        get_last_data = read_mongo_db_sort_limit('stock','Rep_Stock_Season_Com',{},{"_id":0,"years" : 1,"season":1},_sort)
 
-                season = 4
-                #last_yy  =   today.year -2
-                #yy =  today.year -1
-
-        else :
-                 season = season -1
-
-        yy =  today.year -1
-
+        for idx in get_last_data :
+            season = int(idx.get('season'))
+            yy = int(idx.get('years'))
+        """
+        yy ,season = get_last_year_season(season)
+  
 
         match_row_roe = stock_season_roa_roe( yy, season, com_lists)
 
    
-   #print('match_row_e:',match_row_roe.info()) 
-   #print('s_df:',s_df.info())
-
+   #print('688_yy:',yy , 'season:',season)
    match_row = s_df.merge(match_row_roe,how='left' ,on=['code','code_name'])
 
    match_row = match_row.sort_values(by=['EPS_g%'],ascending = False,ignore_index = True).copy()
 
    #match_row = s_df.sort_values(by=['EPS_g%'],ascending = False,ignore_index = True).copy()
 
-   #print('match_row_s_df:',match_row.info())
-
+   """
    if not match_row.empty  :
 
+   """
+   """
       records = match_row.copy()
       #records.columns =["code","code_name","the_year", "last_year" , "EPS_g%"]
       records.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA']
@@ -625,6 +869,9 @@ if not mydoc_code_lists == com_lists :
       insert_many_mongo_db('stock','Rep_Stock_Season_Com',records)
       
       time.sleep(1)
+   """
+   """
+      pass
    ### data empty & get last season report  
    else : 
       
@@ -633,52 +880,38 @@ if not mydoc_code_lists == com_lists :
 
       match_row= pd.DataFrame(list(mydoc_season))
 
-      #print('else:',yy,last_yy,season) 
-###  (mydoc_season) == (com_lists)
+      #print('else_663:',yy,last_yy,season) 
+   ###  (mydoc_season) == (com_lists)
+   """
 else :   
+  
+   yy ,season = get_last_year_season(season)
+
+   last_yy = yy  - 1
 
    mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
 
    match_row= pd.DataFrame(list(mydoc_season))
    
-   #print('else_2:',yy,last_yy,season)
 
-
-
-
+#print('744_yy:',yy , 'season:',season)
 
 ### get last price
-last_modify=get_mongo_last_date()
+last_modify=get_mongo_last_date(1)
 #20230807
-#print('last_modify:',last_modify)
 date_sii = last_modify
 date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('%Y')) - 1911)  + datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('/%m/%d')
 
 
 ### get  data from DB
-#match_row = pd.DataFrame(list(mydoc_season))
-
-#print(date_sii,date_otc)
-
-
-#mydoc = read_mongo_db('stock','Rep_3_Investors',{"last_modify" : last_modify},{"_id":0,"code" :1, "price":1})
-
-#mydoc = pd.DataFrame(list(mydoc))
-
-
-#if mydoc.empty :
 
 mydoc = Rep_price(date_sii,date_otc,com_lists)
 
 
-#print('match_row:',match_row.info())
-#print('mydoc:',mydoc.info())
 
 #match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
-
+### merge price
 match_row_doc = pd.merge(match_row,mydoc, on =['code']) ##dataframe join by column
-#print('match_row_doc:',match_row_doc)
-
 
 match_row_doc.dropna()
 
@@ -697,224 +930,264 @@ match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],
 
 #match_row_doc = pd.merge(match_row_doc,avgg, on =['code']) ##dataframe join by column
 
-#print("PE & yield filter:",match_row.info())
 
 
 ## PE & yield filter
 
-if datetime.datetime.today().isoweekday() == 5 :  ## show all company on friday
-   
-   match_row = match_row_doc.copy() 
 
-else :
+for idx_com in [com_list, com_lists] :
 
-   match_row_filter = match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['yield_60%']>0)] .copy()
+    match_row = pd.DataFrame()
 
-   ### avoid empty of filter
-   if   match_row_filter.empty : 
+    if len(idx_com) == len(com_list) :
 
-       match_row = match_row_doc.copy() 
-       #print('if_match_row:', match_row.info())
-   else  : 
-       match_row = match_row_filter.copy() 
-       #print('else_match_row:',match_row.info() )
+         match_row = match_row_doc[match_row_doc["code"].isin(com_list)]
+         plot_Stock_Eps_Yield_PE_Season(season,yy,com_list)
 
+    	 
+    else : 	 
 
-#print("PE & yield filter:",match_row.info())
-
-## columns order for mail
-"""
-the_sst = "累計盈餘{}_Q{}".format(yy,season)
-last_sst = "累計盈餘{}_Q{}".format(yy-1,season)
-"""
-the_sst = "EPS_{}_Q{}".format(yy,season)
-last_sst = "EPS_{}_Q{}".format(yy-1,season)
-
-
-
-#print(match_row.info())
-
-
-## defiend columns
-match_row.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA','price','yield_60%','PE']
-
-## filter columns 
-match_row =match_row[['code','code_name','the_year','last_year','EPS_g%','price','yield_60%','PE','RoE','RoA']]
-
-## for email
-match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
-
-
-## divieded at seson 4
-#if season == 4 : 
-if today.month >=3 : 
-
-   df_merge=pd.DataFrame()
-   
-
-   """ 
-   dict_stock_season_div={'years':str(today.year) }
-
-   columns_stock_season_div={'_id':0,'years':0,'code_name':0}
-
-   mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividind_Com',dict_stock_season_div ,columns_stock_season_div)
-   """
-   _dicct = [{"$match" :  { "years"  : { "$eq" : str(today.year) } } }
-               ,{ "$sort" : {"dividend_date" : 1 , "dividend_stock_date" :1}}
-           ,{ "$group" : { "_id" : "$code"  , "cash_sum" : { "$sum": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} }  ,
-                     "stock_sum" : { "$sum": { "$cond": [{ "$eq":["$stock_dividend" , float("NaN") ]}, 0, "$stock_dividend"]} }  ,
-                        "last_dividend_date" : {"$last" :"$dividend_date"} , "last_dividend_stock_date" : {"$last" :"$dividend_stock_date"}
-                         }    }
-           ,{ "$project" : { "code" : "$_id"  ,"cash_dividend" : "$cash_sum" , "dividend_date" : "$last_dividend_date" ,"stock_dividend" : "$stock_sum" , "dividend_stock_date" : "$last_dividend_stock_date"  ,"_id" :0  } }]
-
-
-   mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct )
-
-   df =  match_row.copy()
-
-   dfs = pd.DataFrame(list(mydoc_stock_season_diviended))
-
-   #print(df.info())
-   #print(dfs.info())
-   dfs =  dfs.astype({'cash_dividend':'float','stock_dividend':'float'})
-
-   dfs['cash_dividend'] = dfs['cash_dividend'].round(2)   
-   dfs['stock_dividend'] = dfs['stock_dividend'].round(2)   
-
-   #df_merge = pd.merge(df,dfs, on =['code'])
-   df_merge = df.merge(dfs,how='left', on='code')
-  
-   df_merge.rename(columns={'cash_dividend':'cash_div','dividend_date': 'div_date','stock_dividend':'stock_div','dividend_stock_date':'div_stock_date'},inplace=True)
-
-   #match_row = df_merge.copy()
-   #print(df_merge.info()) 
-
-   df_merge['yield%'] = df_merge.apply(lambda x: round(x['cash_div']/x['price']*100,2) if (pd.notnull(x['cash_div'])) else x['cash_div'] ,axis=1)
-   match_row = df_merge[['code','code_name',the_sst,last_sst,'EPS_g%','price','yield%','PE','RoE','RoA','cash_div','div_date','stock_div','div_stock_date']]
-
-   ## ref buy price level , 5years avg
-
-   r_price = Reasonable_Price(5)  
-   r_price["cheap"] = round(r_price['avg']/0.07,2) 
-   r_price["seasonable"] = round(r_price['avg']/0.05,2)  
-   r_price["expensive"] = round(r_price['avg']/0.03,2)  
-   #r_price.rename(columns={"_id":"code"},inplace=True)
-   ### remove avg field
-   r_price = r_price.iloc[:,[0,2,3,4]]
-
-   match_row = match_row.merge(r_price,how='left', on='code')
-
-   sort_column='yield%'
-   assc = False
-
-else :
-
-   sort_column='PE'
-   assc = True
-
-
-#match_row=match_row.sort_values(by=['PE'],ascending = True ,ignore_index = True)
-#match_row=match_row.sort_values(by=[sort_column],ascending = assc ,ignore_index = True)
-
-
-
-### for mail 
-for idx in list(range(2,17)) :
-    #if idx == 4 or idx == 6:
-    if idx == 4 :
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
-    ## 'yield_60%' , 'yield%'
-    elif idx == 6 :
-
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x  if x >6  else  f'<font color="green">%s</font>' % x  if pd.isnull(x) else str(x))
-
-    #elif idx >= 11 and today.month >=3 :
-    elif idx >= 11 and idx <=13 and today.month >=3 :
-
-         ##stock_div 
-         if idx == 12 :
-            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x  if x >0  else str(x))
-
-         ## div_date , div_stock_date
-         else :
-
-              continue
-
-    #elif idx >= 14 and idx <= 15 and today.month >=3:
-    elif idx >= 14 and idx <= 16 and today.month >=3:
-
-         ## price compare / cheap ,seasonable,expensive
-         compare_data = match_row.iloc[:,[5,10,idx,11,13]].copy()
-         compare_name = list(compare_data.columns)
-         #print(compare_data.info())
-         #<p style="background-color:Tomato;">Lorem ipsum...</p>
-         if idx == 14 :
-            p_stype= f'<p style="background-color:Lime;">%s</p>'
-            ##match_row.iloc[:,17]
-            match_row['cheap_check'] =  compare_data.apply(lambda  x: 1   if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else 0 ,axis=1)
-
-         elif idx == 15 :
-            p_stype= f'<p style="background-color:Aqua;">%s</p>'
-            ##match_row.iloc[:,18]
-            match_row['seasonable_check'] =  compare_data.apply(lambda  x: 1   if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else 0 ,axis=1)
-
-         elif idx == 16 :
-
-           p_stype= f'<p style="background-color:Tomato;">%s</p>'
-
-
-
-
-         match_row.iloc[:,idx] =  compare_data.apply(lambda  x: p_stype  % x[compare_name[2]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[2]],axis=1)
-
-         ### color for price / cash_div
-
-         #if idx == 15 : 
-         if idx == 16 :
-
-
-            match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
-
-            match_row.iloc[:,5] =  compare_data.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' % x[compare_name[0]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[0]],axis=1)
+         ### del images/*.png
+         del_png.del_images()
+ 
+         if datetime.datetime.today().isoweekday() == 5 :  ## show all company on friday
        
-            ## div_date /div_stock_date
-     
-            match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
-            
-            match_row.iloc[:,13] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[4]]  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[4]],axis=1)
+             match_row = match_row_doc.copy()
+         
+       
+         else :
+                
+             match_row_filter = match_row_doc[(match_row_doc['PE']<35) & (match_row_doc['yield_60%']>0)] .copy()
+       
+             ### avoid empty of filter
+             if   match_row_filter.empty :
+       
+                  match_row = match_row_doc.copy()
+             else  :
+                  match_row = match_row_filter.copy()    	 
+          
+    ## columns order for mail                                                                                                                                                                                                        
+    """                                                                                                                                                                                                                           
+    the_sst = "累計盈餘{}_Q{}".format(yy,season)                                                                                                                                                                                      
+    last_sst = "累計盈餘{}_Q{}".format(yy-1,season)                                                                                                                                                                                   
+    """                                                                                                                                                                                                                           
+    the_sst = "EPS_{}_Q{}".format(yy,season)                                                                                                                                                                                      
+    last_sst = "EPS_{}_Q{}".format(yy-1,season)                                                                                                                                                                                   
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+    #print(match_row.info())                                                                                                                                                                                                                         
+    ## defiend columns                                                                                                                                                                                                            
+    match_row.columns =['code','code_name','the_year','last_year','EPS_g%','Net_Income','Asset','Equity','RoE','RoA','price','yield_60%','PE']                                                                                    
+                                                                                                                                                                                                                             
+    ## filter columns                                                                                                                                                                                                             
+    match_row =match_row[['code','code_name','the_year','last_year','EPS_g%','price','yield_60%','PE','RoE','RoA']]                                                                                                               
+                                                                                                                                                                                                                             
+    ## for email                                                                                                                                                                                                                  
+    match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)                                                                                                                                        
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+    ## divieded at seson 4                                                                                                                                                                                                        
+    if today.month >=1 :                                                                                                                                                                                                          
+                                                                                                                                                                                                                             
+       df_merge=pd.DataFrame()                                                                                                                                                                                                    
+                                                                                                                                                                                                                             
+       """                                                                                                                                                                                                                        
+       dict_stock_season_div={'years':str(today.year) }                                                                                                                                                                           
+                                                                                                                                                                                                                             
+       columns_stock_season_div={'_id':0,'years':0,'code_name':0}                                                                                                                                                                 
+                                                                                                                                                                                                                             
+       mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividind_Com',dict_stock_season_div ,columns_stock_season_div)                                                                                             
+       """                                                                                                                                                                                                                        
+       _dicct = [{"$match" :  { "years"  : { "$eq" : str(today.year) } } }                                                                                                                                                        
+                   ,{ "$sort" : {"dividend_date" : 1 , "dividend_stock_date" :1}}                                                                                                                                                 
+               ,{ "$group" : { "_id" : "$code"  , "cash_sum" : { "$sum": { "$cond": [{ "$eq":["$cash_dividend" , float("NaN") ]}, 0, "$cash_dividend"]} }  ,                                                                      
+                         "stock_sum" : { "$sum": { "$cond": [{ "$eq":["$stock_dividend" , float("NaN") ]}, 0, "$stock_dividend"]} }  ,                                                                                            
+                            "last_dividend_date" : {"$last" :"$dividend_date"} , "last_dividend_stock_date" : {"$last" :"$dividend_stock_date"}                                                                                   
+                             }    }                                                                                                                                                                                               
+               ,{ "$project" : { "code" : "$_id"  ,"cash_dividend" : "$cash_sum" , "dividend_date" : "$last_dividend_date" ,"stock_dividend" : "$stock_sum" , "dividend_stock_date" : "$last_dividend_stock_date"  ,"_id" :0  } }]
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+       mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct )                                                                                                                          
+                                                                                                                                                                                                                             
+       df =  match_row.copy()                                                                                                                                                                                                     
+                                                                                                                                                                                                                             
+       dfs = pd.DataFrame(list(mydoc_stock_season_diviended))                                                                                                                                                                     
+                                                                                                                                                                                                                             
+       dfs =  dfs.astype({'cash_dividend':'float','stock_dividend':'float'})                                                                                                                                                      
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+       dfs['cash_dividend'] = dfs['cash_dividend'].round(2)                                                                                                                                                                       
+       dfs['stock_dividend'] = dfs['stock_dividend'].round(2)                                                                                                                                                                     
+       df_merge = df.merge(dfs,how='left', on='code')                                                                                                                                                                             
+       df_merge.rename(columns={'cash_dividend':'cash_div','dividend_date': 'div_date','stock_dividend':'stock_div','dividend_stock_date':'div_stock_date'},inplace=True)                                                         
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+       df_merge['yield%'] = df_merge.apply(lambda x: round(x['cash_div']/x['price']*100,2) if (pd.notnull(x['cash_div'])) else x['cash_div'] ,axis=1)                                                                             
+       match_row = df_merge[['code','code_name',the_sst,last_sst,'EPS_g%','price','yield%','PE','RoE','RoA','cash_div','div_date','stock_div','div_stock_date']]                                                                  
+                                                                                                                                                                                                                             
+       ## ref buy price level , 5years avg                                                                                                                                                                                        
+                                                                                                                                                                                                                             
+       r_price = Reasonable_Price(5)                                                                                                                                                                                              
+       r_price["cheap"] = round(r_price['avg']/0.07,2)                                                                                                                                                                            
+       r_price["seasonable"] = round(r_price['avg']/0.05,2)                                                                                                                                                                       
+       r_price["expensive"] = round(r_price['avg']/0.03,2)                                                                                                                                                                        
+       #r_price.rename(columns={"_id":"code"},inplace=True)                                                                                                                                                                       
+       ### remove avg field                                                                                                                                                                                                       
+       r_price = r_price.iloc[:,[0,2,3,4]]                                                                                                                                                                                        
+                                                                                                                                                                                                                             
+       match_row = match_row.merge(r_price,how='left', on='code')                                                                                                                                                                 
+                                                                                                                                                                                                                             
+       sort_column='yield%'                                                                                                                                                                                                       
+       sort_column_1='PE'
 
+       assc = False                                                                                                                                                                                                               
+       range_s = 0                                                                                                                                                                                                                
+       range_d= 17                                                                                                                                                                                                                
 
+       check_sort_column=['cheap_check','seasonable_check',sort_column,sort_column_1,'cash_div']                                                                                                                               
+       check_assc = [False,False,False,assc,False]                                                                                                                                                                             
+       rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓',sort_column : sort_column+'↓',sort_column_1:sort_column_1+'↑','cash_div' : 'cash_div↓'}  
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+                                                                                                                                                                                                                             
+    else :                                                                                                                                                                                                                        
+                                                                                                                                                                                                                             
+       sort_column='PE'                                                                                                                                                                                                           
+       assc = True                                                                                                                                                                                                                
+       range_s = 0                                                                                                                                                                                                                
+       range_d= 10                                                                                                                                                                                                                
+                                                                                                                                                                                                                             
+       check_sort_column=[sort_column]                                                                                                                                                                                            
+       check_assc = assc                                                                                                                                                                                                          
+                                                                                                                                                                                                                             
+       rename_col = {'PE':'PE↑'}                                                                                                                                                                                                  
 
+    """                                                                                                                                                                                                                          
+    for idx in check_sort_column :                                                                                                                                                                                             
+        match_row[idx] = match_row[idx].astype(float)                                                                                                                                                                          
+    """
+    match_row['PE'] = match_row['PE'].astype(float)     
+                                                                                                                                                                                                                             
+    	
+    compare_data_p_stype = pd.DataFrame()
+    ### for mail thml
+    for idx in list(range(range_s,range_d)) :
+        ## code
+        if idx == 0 :
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+    
+        elif idx == 4 :
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
+        ## 'yield_60%' , 'yield%'
+        elif idx == 6 :
+    
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x  if x >6  else  f'<font color="green">%s</font>' % x  if pd.isnull(x) else str(x))
+    
+        #elif idx >= 11 and today.month >=3 :
+        #elif idx >= 11 and idx <=13 and today.month >=3 :
+        elif idx >= 11 and idx <=13  :
+    
+             ##stock_div 
+             if idx == 12 :
+                match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x  if x >0  else str(x))
+    
+             ## div_date , div_stock_date
+             else :
+    
+                  continue
+    
+        #elif idx >= 14 and idx <= 15 and today.month >=3:
+        #elif idx >= 14 and idx <= 16 and today.month >=3:
+        elif idx >= 14 and idx <= 16 :
+    
+             ## price compare / cheap ,seasonable,expensive
+             compare_data = match_row.iloc[:,[5,10,idx,11,13]].copy()
+             compare_name = list(compare_data.columns)
+             #print(compare_data.info())
+             #<p style="background-color:Tomato;">Lorem ipsum...</p>
+             if idx == 14 :
+                p_stype= f'<p style="background-color:Lime;">%s</p>'
+                ##match_row.iloc[:,17]
+                match_row['cheap_check'] =  compare_data.apply(lambda  x: 1   if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else 0 ,axis=1)
+    
+             elif idx == 15 :
+                p_stype= f'<p style="background-color:Aqua;">%s</p>'
+                ##match_row.iloc[:,18]
+                match_row['seasonable_check'] =  compare_data.apply(lambda  x: 1   if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else 0 ,axis=1)
+    
+             elif idx == 16 :
+    
+               p_stype= f'<p style="background-color:Tomato;">%s</p>'
+    
     
 
+             compare_data_p_stype = pd.concat([compare_data_p_stype,compare_data.iloc[:,2]] ,axis=1)
+   
+             match_row.iloc[:,idx] =  compare_data.apply(lambda  x: p_stype  % x[compare_name[2]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[2]],axis=1)
+    
+             ### color for price / cash_div
+             #if idx == 15 : 
+             if idx == 16 :
+    
+    
+                match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
+              
+
+                #compare_data_p_stype = match_row.iloc[:,[5,14,15,16]].copy()
+                #compare_name_p_stype = list(compare_data_p_stype.columns) 
+                compare_data_p_stype = pd.concat([compare_data_p_stype,match_row.iloc[:,5]] ,axis=1)  ## adding column[price]
+                
+                compare_data_p_stype = compare_data_p_stype.iloc[:,[3,0,1,2]] ### sort column for compare_row
+
+                match_row.iloc[:,5] =  compare_data_p_stype.apply(compare_row,axis=1)
+
+    
+                ## div_date /div_stock_date            
+                match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
+    
+                match_row.iloc[:,13] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[4]]  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[4]],axis=1)
+    
+    
+    
+        else :
+    
+             if idx > 1:
+    
+                match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+    
+    
+    #check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div']
+    #check_assc = [False,False,False,False]
+    
+    
+    #match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
+    #match_row=match_row.iloc[:,0:17].copy()
+    #match_row=match_row.iloc[:,range_s:range_d].copy()
+   
+    """ 
+    if range_d>=17 :
+    
+       match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
+       match_row=match_row.iloc[:,0:17].copy()
+    """
+
+    match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
+    match_row=match_row.iloc[:,range_s:range_d].copy()
+    
+    match_row =  match_row.rename(columns=rename_col)
+    
+    
+    if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
+        #match_row.to_html('hot_news_link.log')
+        if not match_row.empty :
+           body = match_row.to_html(classes='table table-striped',escape=False)
+    
+           #send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=to_date),body)
+           send_mail.send_email('Stock_Eps_Yield_PE_{today}_com_Q{s}'.format(today=date_sii,s=season),body)
     else :
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+        #print(match_row.to_string(index=False))
+        #print(match_row.to_html(escape=False))
+        print(match_row.head(100))
 
-
-check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div','EPS_g%']
-check_assc = [False,False,False,False,False]
-
-
-
-match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
-match_row=match_row.iloc[:,0:17].copy()
-
-
-if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
-    #match_row.to_html('hot_news_link.log')
-    if not match_row.empty :
-       body = match_row.to_html(classes='table table-striped',escape=False)
-       
-       #body = match_row.to_html(escape=False)
-       #log_date = datetime.date.today().strftime("%Y-%m-%d")
-       #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = today.year ,season=season) ,body)
-       #send_mail.send_email('{year}_stock_Q{season}_report' .format(year = yy ,season=season) ,body)
-       #to_date = datetime.date.today().strftime("%Y%m%d")
-       #to_date='date_sii'
-       #send_mail.send_email('Stock_Eps_Earnning_Yield_{today}_com'.format(today=to_date),body)
-       #send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=to_date),body)
-       send_mail.send_email('Stock_Eps_Yield_PE_{today}_com_Q{s}'.format(today=date_sii,s=season),body)
-else :
-    #print(match_row.to_string(index=False))
-    #print(match_row.to_html(escape=False))
-    print(match_row.head(100))
