@@ -96,7 +96,7 @@ def read_mongo_db(_db,_collection,dicct,_columns):
 def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
-    return collection.find(dicct,_columns).sort(_sort).limit(50)
+    return collection.find(dicct,_columns).sort(_sort)
 
 
 
@@ -214,7 +214,6 @@ def Dividend(year,com_lists) :
 
 def Dividend_goodinfo(years) :
 
-
     url = 'https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR='+str(years)
     
     ### save Dividend_file path
@@ -242,12 +241,17 @@ def Dividend_goodinfo(years) :
 
     os.rename(old, file_html)
     #print(f"time: {time.time() - start} (s)")
+    file_html = './Dividend_file/'+str(years)+'_SaleMonDetail.html' 
 
     df = pd.read_html(file_html)[0] ## []list to pandas
     ### Filter columns
+    """
     dfs = df.iloc[:,[1,2,15,4,18,9]]
     dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date']
- 
+    """
+    dfs = df.iloc[:,[1,2,15,4,18,9,5]]
+    dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date','price']
+
 
     #year = "'"+ url_html.split("_")[0][2:4] +"/"
     year = "'"+ str(years)[2:4] +"/"
@@ -275,7 +279,7 @@ def Dividend_goodinfo(years) :
 
     _values = { "_id" :0 , "code" :1 }
 
-    mydoc = read_mongo_db('stock','Rep_Stock_dividind_Com',_dictt,_values)
+    mydoc = read_mongo_db('stock','Rep_Stock_dividend_Com',_dictt,_values)
 
     df_mydoc = pd.DataFrame(list(mydoc))
 
@@ -296,10 +300,10 @@ def Dividend_goodinfo(years) :
     
     #print('d_dictt:',com_list)
     """ 
-    delete_many_mongo_db('stock','Rep_Stock_dividind_Com',d_dictt)
+    delete_many_mongo_db('stock','Rep_Stock_dividend_Com',d_dictt)
     records = df_merge.copy()
     records =records.to_dict(orient='records')
-    insert_many_mongo_db('stock','Rep_Stock_dividind_Com',records)
+    insert_many_mongo_db('stock','Rep_Stock_dividend_Com',records)
     """
     #return dfs.sort_values(by=['dividend_date'],ascending = False,ignore_index = True)
 
@@ -347,8 +351,8 @@ def Dividend_twse():
        del_year = match_row.iloc[0,6]
        del_filter ={'years': del_year , 'code': {'$in' : com_list}}      
 
-       delete_many_mongo_db('stock','Rep_Stock_dividind_Com',del_filter)
-       insert_many_mongo_db('stock','Rep_Stock_dividind_Com',records)
+       delete_many_mongo_db('stock','Rep_Stock_dividend_Com',del_filter)
+       insert_many_mongo_db('stock','Rep_Stock_dividend_Com',records)
   
    
     #return match_row.sort_values(by=['dividend_date'],ascending = False,ignore_index = True)
@@ -442,8 +446,9 @@ except :
 #year=2024
 #yy = year
 
+
 key_yy=str(today.year)
-#key_yy='2021'
+#key_yy='2024'
 
 #div_data = Dividend(yy,com_lists)
 
@@ -455,8 +460,14 @@ div_data = Dividend_goodinfo(key_yy)
 
 
 div_data.columns= llist(len(div_data.columns))
-div_data = div_data.iloc[:,[0,2,3,4,5]].copy()
-div_data.rename(columns={0: 'code', 2:'cash_dividend',3: 'dividend_date',4: 'stock_dividend',5:'dividend_stock_date'}, inplace=True)
+div_data = div_data.iloc[:,[0,2,3,4,5,6]].copy() ## adding price
+merge_data =div_data.iloc[:,[1,5]].copy() ### cash_dividend , price
+merge_data_name = list(merge_data.columns)
+div_data[6] = merge_data.apply(lambda  x:   round((x[merge_data_name[0]] + x[merge_data_name[1]]),2)  if   x[merge_data_name[0]]  > 0 else 0 ,axis=1) ### price = cash_dividend + price
+div_data[7] = merge_data.apply(lambda  x:   round(x[merge_data_name[0]] / (x[merge_data_name[0]] + x[merge_data_name[1]])*100 ,2)  if   x[merge_data_name[0]]  > 0 else 0 ,axis=1) ### price = cash_dividend + price
+
+div_data.rename(columns={0: 'code', 2:'cash_dividend',3: 'dividend_date',4: 'stock_dividend',5:'dividend_stock_date',6:'price',7 : 'yield'}, inplace=True)
+
 
 #div_data['cash_dividend'] = div_data.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
 #div_data['stock_dividend'] = div_data.apply(lambda x : dividend_checked(x['stock_dividend']) ,axis=1 )
@@ -492,6 +503,9 @@ div_doc['stock_dividend']=div_doc['stock_dividend'].fillna(0)
 #match_row = div_doc.copy()
 
 match_row = div_doc.drop_duplicates(subset=['code', 'cash_dividend','dividend_date']).copy()
+match_row["years"]=str(key_yy)
+
+
 
 if not match_row.empty  :
 
@@ -505,8 +519,8 @@ if not match_row.empty  :
       del_filter = {"years":str(key_yy)}
      
       #print("del_filter:",del_filter)
-      delete_many_mongo_db('stock','Rep_Stock_dividind_Com',del_filter)
-      insert_many_mongo_db('stock','Rep_Stock_dividind_Com',records)
+      delete_many_mongo_db('stock','Rep_Stock_dividend_Com',del_filter)
+      insert_many_mongo_db('stock','Rep_Stock_dividend_Com',records)
 
       time.sleep(1)
       
@@ -515,23 +529,22 @@ if not match_row.empty  :
       #Dividend_twse()
 
 
-
 ### Mail Report Dividind Coming 
 
 _dividend_date = today.strftime('%m/%d')
 mail_date = today.strftime('%Y%m%d')
 
-
 _dictt = { "years" : str(key_yy),"dividend_date" : {"$gte": _dividend_date}}
 
-_values = { "_id" :0 }
+_values = { "_id" :0 ,"price":0, "yield":0}
 
 _sort=[("dividend_date",1)]
 
-mydoc = read_mongo_db_sort_limit('stock','Rep_Stock_dividind_Com',_dictt,_values,_sort)
+mydoc = read_mongo_db_sort_limit('stock','Rep_Stock_dividend_Com',_dictt,_values,_sort)
 
 match_row = pd.DataFrame(list(mydoc))
-  
+
+
 #if not match_row.empty and time.strftime("%H:%M:%S", time.localtime()) > mail_time :
 if not match_row.empty :
 
