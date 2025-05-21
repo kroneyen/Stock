@@ -120,7 +120,9 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     for url in url_list : 
        dfs=pd.DataFrame()
        r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
-       r.encoding = 'utf8'
+       #r.encoding = 'utf8'
+       r.encoding = 'big5-hkscs'  ### big5 extensions code
+
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
        
@@ -416,15 +418,23 @@ if not match_row.empty :
         
 
 
-   for idx in list(range(2,7)) :
-   
-       if idx == 4 or idx ==5 or idx == 6:  
+   #for idx in list(range(2,7)) :
+   for idx in list(range(0,7)) :
+  
+       if idx == 0 :
+
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID=%s&RPT_CAT=M_FYEA" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+
+ 
+       elif idx == 4 or idx ==5 or idx == 6:  
 
            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 
-       else :
 
-           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x) if x < 0 else str(x))
+       else :
+           if idx > 1 :           
+
+               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x) if x < 0 else str(x))
 
 
 if  time.strftime("%H:%M:%S", time.localtime()) > mail_time :
@@ -433,7 +443,7 @@ if  time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        
        ## for email
        the_sst = "EPS_{}_Q{}".format(s_year,s_season)
-       last_sst = "EPS_{}_Q{}".format(int(s_year)-1,season)
+       last_sst = "EPS_{}_Q{}".format(int(s_year)-1,s_season)
 
        match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
 
