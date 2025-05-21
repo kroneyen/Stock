@@ -192,7 +192,7 @@ def send_tg_bot_photo(token,chat_id,msg,img_url):
 
 
 
-def REP_3_Investors_OI(date):
+def Rep_3_Investors_OI(date):
 
     user_agent = UserAgent()
   
@@ -257,8 +257,8 @@ def REP_3_Investors_OI(date):
       plot_date =date.strftime('%Y%m%d')                                             
       OI_data_value = data['臺股期貨']['外資']['未平倉淨口數'] 
       records = [{'date' : plot_date,'open_interest': OI_data_value }] ##for insert_many
-      delete_many_mongo_db('stock','REP_3_Investors_OI',{'date':plot_date})
-      insert_many_mongo_db('stock','REP_3_Investors_OI',records)
+      delete_many_mongo_db('stock','Rep_3_Investors_OI',{'date':plot_date})
+      insert_many_mongo_db('stock','Rep_3_Investors_OI',records)
 
     time.sleep(random.randrange(1, 3, 1))
 
@@ -269,7 +269,7 @@ def polt_3_Investors_OI(date):
  
    #last_modify =start_date
 
-   mydoc = read_mongo_db('stock','REP_3_Investors_OI',{'date': {'$gte' : date}},{'_id':0})
+   mydoc = read_mongo_db('stock','Rep_3_Investors_OI',{'date': {'$gte' : date}},{'_id':0})
  
    df = pd.DataFrame(list(mydoc))
    
@@ -286,7 +286,7 @@ def polt_3_Investors_OI(date):
          xycoords = ax.get_yaxis_transform(), textcoords="offset points",                    
          size=10, va="center")                                                               
                                                                                              
-   plt.savefig('./images/image_REP_3_Investors_OI_'+ date +'.png' )
+   plt.savefig('./images/image_Rep_3_Investors_OI_'+ date +'.png' )
    plt.clf()
 
    return df
@@ -297,7 +297,7 @@ def get_mongo_last_date(cal_day):
  dictt_set = [ {"$group": { "_id" : { "$toInt" : "$date" } }},{"$sort" : {"_id" :-1}} , { "$limit" : cal_day},{"$sort" : {"_id" :1}} , { "$limit" :1}]
 
  ### mongo dict data
- set_doc =  read_aggregate_mongo('stock','REP_3_Investors_OI',dictt_set)
+ set_doc =  read_aggregate_mongo('stock','Rep_3_Investors_OI',dictt_set)
 
  ### for lists  get cal date 
  for idx in set_doc:
@@ -331,8 +331,8 @@ def match_row_5 ( get_updatetime ,match_row,extend ) :
                   time.sleep(random.randrange(1, 3, 1))
 
                   #tg_caption='test_png'
-                  #tg_file=open('./images/image_REP_3_Investors_OI_'+ ddate +'.png','rb') 
-                  #tg_file=open('images/image_REP_3_Investors_OI_'+ ddate +'.png','rb' )
+                  #tg_file=open('./images/image_Rep_3_Investors_OI_'+ ddate +'.png','rb') 
+                  #tg_file=open('images/image_Rep_3_Investors_OI_'+ ddate +'.png','rb' )
              
                   #send_tg_bot_photo(tg_key,tg_chat_id[0],tg_caption,tg_file)  
 
@@ -355,7 +355,7 @@ mail_date=today.strftime('%Y-%m-%d')
 ### get data into mongo
 while start_date <= today : 
 
-  REP_3_Investors_OI(start_date)
+  Rep_3_Investors_OI(start_date)
 
   start_date += timedelta(days=1)   
 
@@ -389,7 +389,7 @@ if datetime.today().isoweekday() == 5 :
 
      body = mail_match_row.to_html(classes='table table-striped',escape=False)
 
-     send_mail.send_email('REP_3_Investors_OI_{today}'.format(today=mail_date),body)
+     send_mail.send_email('Rep_3_Investors_OI_{today}'.format(today=mail_date),body)
 
 else  :
    #print("%s target_currency is not match buy_price" % get_updatetime)
