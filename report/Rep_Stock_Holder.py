@@ -154,7 +154,8 @@ def get_Rep_Stock_Holder(com_num):
       com_list = read_mongo_db('stock','com_list',{},{'code':1,'_id':0})
       my_doc_list = pd.DataFrame(list(com_list)) ##cours to dric
           
-      df = df[df['證券代號'].isin(list(my_doc_list['code']))]
+      #df = df[df['證券代號'].isin(list(my_doc_list['code']))]
+      df = df[df['證券代號'].str.replace(' ','').isin(list(my_doc_list['code']))]
     else : 
    
       df = df[df['證券代號'].isin([com_num])] 
