@@ -148,8 +148,6 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     #pd.options.display.max_columns 
     #pd.options.display.max_colwidth = 200 
 
-    #url_sii = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=sii&year='+ str(year-1911)  +'&season='+ str(season)
-    #url_otc = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=otc&year='+ str(year-1911)  +'&season='+ str(season)    
     url_sii = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=sii&year='+ str(year-1911)  +'&season='+ str(season)
     url_otc = 'https://mopsov.twse.com.tw/mops/web/ajax_t163sb04?encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=otc&year='+ str(year-1911)  +'&season='+ str(season)    
     
@@ -598,7 +596,7 @@ def Reasonable_Price(limit_y) :
 
 
 
-   last_5years_doc = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct ) 
+   last_5years_doc = read_aggregate_mongo_db('stock','Rep_Stock_dividend_Com',_dicct ) 
 
    last_5years = list(last_5years_doc)[0].get("_id")
 
@@ -611,7 +609,7 @@ def Reasonable_Price(limit_y) :
                            ,"_id" :0  } } ]
 
 
-   mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct)
+   mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividend_Com',_dicct)
 
    df = pd.DataFrame(list(mydoc_stock_season))
    ### code	avg	stock_avg
@@ -637,6 +635,37 @@ def get_last_year_season(season):
   return years ,season
 
 
+def compare_row(row):
+
+  rows=[]
+  for idx in range(1,len(row)) :
+
+    #print(row.iloc[idx] ,row.iloc[0] )
+    if (float(row.iloc[idx]) > float(row.iloc[0])) :
+
+      if  idx==1 :
+        p_stype= f'<p style="background-color:Lime;">%s</p>'
+
+      elif idx==2 :
+        p_stype= f'<p style="background-color:Aqua;">%s</p>'
+
+      elif idx==3 :
+        p_stype= f'<p style="background-color:Tomato;">%s</p>'
+
+
+      idx_p_stype =  p_stype % row.iloc[0]
+      rows.append(idx_p_stype)
+
+
+    elif idx==3 and rows ==[] :
+       idx_p_stype = row.iloc[0]
+       rows.append(idx_p_stype)
+
+
+    if not rows ==[] :
+      break
+
+  return rows[0]
 
 
 
@@ -669,27 +698,6 @@ else :
       last_yy = today.year -1
 
 
-### get atlas mongodb data 
-
-try :
-
-  ### got mongo data from atlas
-  dictt = {}
-  _columns= {"code":1,"_id":0}
-  com_lists = []
-
-  mydoc = atlas_read_mongo_db('stock','com_lists',dictt,_columns)
-
-  for idx in mydoc :
-    com_lists.append(idx.get('code'))
-
-except :
-   ### got redis data from local
-   redis_lists = get_redis_data("com_lists","hkeys",'NULL','NULL') ## get  redis data
-
-   for  idx in redis_lists :
-        if not re.match("(\w+_p$)", idx) :  
-           com_lists.append(idx)
 """
 
 
@@ -1005,7 +1013,7 @@ for idx_com in [com_list, com_lists] :
                                                                                                                                                                                                                              
        columns_stock_season_div={'_id':0,'years':0,'code_name':0}                                                                                                                                                                 
                                                                                                                                                                                                                              
-       mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividind_Com',dict_stock_season_div ,columns_stock_season_div)                                                                                             
+       mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividend_Com',dict_stock_season_div ,columns_stock_season_div)                                                                                             
        """                                                                                                                                                                                                                        
        _dicct = [{"$match" :  { "years"  : { "$eq" : str(today.year) } } }                                                                                                                                                        
                    ,{ "$sort" : {"dividend_date" : 1 , "dividend_stock_date" :1}}                                                                                                                                                 
@@ -1016,7 +1024,7 @@ for idx_com in [com_list, com_lists] :
                ,{ "$project" : { "code" : "$_id"  ,"cash_dividend" : "$cash_sum" , "dividend_date" : "$last_dividend_date" ,"stock_dividend" : "$stock_sum" , "dividend_stock_date" : "$last_dividend_stock_date"  ,"_id" :0  } }]
                                                                                                                                                                                                                              
                                                                                                                                                                                                                              
-       mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct )                                                                                                                          
+       mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividend_Com',_dicct )                                                                                                                          
                                                                                                                                                                                                                              
        df =  match_row.copy()                                                                                                                                                                                                     
                                                                                                                                                                                                                              
@@ -1041,20 +1049,26 @@ for idx_com in [com_list, com_lists] :
        r_price["seasonable"] = round(r_price['avg']/0.05,2)                                                                                                                                                                       
        r_price["expensive"] = round(r_price['avg']/0.03,2)                                                                                                                                                                        
        #r_price.rename(columns={"_id":"code"},inplace=True)                                                                                                                                                                       
+       #print('1054_r_price_info:',r_price.info())
        ### remove avg field                                                                                                                                                                                                       
-       r_price = r_price.iloc[:,[0,2,3,4]]                                                                                                                                                                                        
+       #r_price = r_price.iloc[:,[0,2,3,4]]                                                                                                                                                                                        
+       r_price = r_price.iloc[:,[0,2,3,4,1]]                                                                                                                                                                                        
                                                                                                                                                                                                                              
        match_row = match_row.merge(r_price,how='left', on='code')                                                                                                                                                                 
+       ### addin avg
+       match_row['avg'] = match_row.apply(lambda  x:  round(x['avg'] / x['price'] *100,2)   if x['avg'] > 0 else 0 , axis=1 )
+
                                                                                                                                                                                                                              
-       sort_column='yield%'                                                                                                                                                                                                       
-       sort_column_1='PE'                                                                                                                                                              
+       #sort_column='yield%'                                                                                                                                                                                                       
+       #sort_column_1='PE'                                                                                                                                                              
+       sort_column= {'yield%','PE','avg'}
        assc = True                                                                                                                                                                                                               
        range_s = 0                                                                                                                                                                                                                
-       range_d= 17                                                                                                                                                                                                                
+       range_d= len(match_row.columns) -1 ### remove avg/ cheap_check/ seasonable_check                                                                                                                                                                                                              
                                                                                                                                                                                                                              
-       check_sort_column=['cheap_check','seasonable_check',sort_column,sort_column_1,'cash_div']                                                                                                                                                
-       check_assc = [False,False,False,assc,False]                                                                                                                                                                                      
-       rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓',sort_column : sort_column+'↓',sort_column_1:sort_column_1+'↑','cash_div' : 'cash_div↓'}                                                                                                         
+       check_sort_column=['cheap_check','seasonable_check','PE','yield%','avg','cash_div']                                                                                                                                                
+       check_assc = [False,False,assc ,False,False,False]                                                                                                                                                                                      
+       rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓','yield%' : 'yield%↓','PE': 'PE↑','cash_div' : 'cash_div↓' , 'avg':'5avg_yield'}                                                                                                         
                                                                                                                                                                                                                              
                                                                                                                                                                                                                              
     else :                                                                                                                                                                                                                        
@@ -1062,7 +1076,7 @@ for idx_com in [com_list, com_lists] :
        sort_column='PE'                                                                                                                                                                                                           
        assc = True                                                                                                                                                                                                                
        range_s = 0                                                                                                                                                                                                                
-       range_d= 10                                                                                                                                                                                                                
+       range_d= len(match_row.columns)                                                                                                                                                                                                             
                                                                                                                                                                                                                              
        check_sort_column=[sort_column]                                                                                                                                                                                            
        check_assc = assc                                                                                                                                                                                                          
@@ -1073,10 +1087,9 @@ for idx_com in [com_list, com_lists] :
     for idx in check_sort_column :                                                                                                                                                                                             
         match_row[idx] = match_row[idx].astype(float)                                                                                                                                                                          
     """
-    match_row['PE'] = match_row['PE'].astype(float)                                                                                                                                                                                                                          
-                                                                                                                                                                                                                             
-                                                                                                                                                                                                                             
-    	
+    match_row['PE'] = match_row['PE'].astype(float)                                                                                                                                                                                                 
+    #print('1088_match_row_info:',match_row.info())                         
+    compare_data_p_stype = pd.DataFrame() 	
     ### for mail HTML
     for idx in list(range(range_s,range_d)) :
         ## code
@@ -1127,66 +1140,59 @@ for idx_com in [com_list, com_lists] :
                p_stype= f'<p style="background-color:Tomato;">%s</p>'
     
     
-    
-    
+             compare_data_p_stype = pd.concat([compare_data_p_stype,compare_data.iloc[:,2]] ,axis=1)
+                 
              match_row.iloc[:,idx] =  compare_data.apply(lambda  x: p_stype  % x[compare_name[2]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[2]],axis=1)
     
              ### color for price / cash_div
              #if idx == 15 : 
              if idx == 16 :
-    
-    
+
+
                 match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
     
-                match_row.iloc[:,5] =  compare_data.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' % x[compare_name[0]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[0]],axis=1)
+                compare_data_p_stype = pd.concat([compare_data_p_stype,match_row.iloc[:,5]] ,axis=1)  ## adding column[price]
 
+                compare_data_p_stype = compare_data_p_stype.iloc[:,[3,0,1,2]] ### sort column for compare_row
 
-                #match_row.iloc[:,5] =  compare_data.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' % x[compare_name[0]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[0]],axis=1)
+                match_row.iloc[:,5] =  compare_data_p_stype.apply(compare_row,axis=1)
+
     
-                ## div_date /div_stock_date            
+                ## div_date /div_stock_date / 5_avg_yield           
                 match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
     
                 match_row.iloc[:,13] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[4]]  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[4]],axis=1)
-    
-    
+
     
         else :
     
-             if idx > 1:
-    
+             if idx > 1 and idx < 17 and idx != 7:
+            
                 match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+             
+             elif idx == 17 : ###  5avg_yield
+
+               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Fuchsia;">%s</p>' % x if x >5  else str(x))
     
     
-    #check_sort_column=['cheap_check','seasonable_check',sort_column,'cash_div']
-    #check_assc = [False,False,False,False]
-    
-    
-    #match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
-    #match_row=match_row.iloc[:,0:17].copy()
-    #match_row=match_row.iloc[:,range_s:range_d].copy()
-    
-    """
-    if range_d>=17 :
-    
-       match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
-       match_row=match_row.iloc[:,0:17].copy()
-    """
+   
+    ### sort columns 
     match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
-    match_row=match_row.iloc[:,range_s:range_d].copy()
+
+    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))  ### PE by sort 
     
+    match_row=match_row.iloc[:,range_s:range_d].copy() ### remove 5avg_yield
     
-    match_row =  match_row.rename(columns=rename_col)
-    
-    
+    match_row =  match_row.rename(columns=rename_col)  
+
+ 
     if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
         #match_row.to_html('hot_news_link.log')
         if not match_row.empty :
+
            body = match_row.to_html(classes='table table-striped',escape=False)
-    
-           #send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=to_date),body)
            send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=date_sii),body)
     else :
-        #print(match_row.to_string(index=False))
         #print(match_row.to_html(escape=False))
         print(match_row.head(100))
 
