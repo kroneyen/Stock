@@ -48,7 +48,7 @@ def read_mongo_db_sort_limit(_db,_collection,dicct,_columns,_sort):
 _db= 'stock'
 
 #_collection=['Rep_3_Investors','Rep_Stock_Exchange','Rep_Stock_Holder','Rep_Stock_Season','Rep_Stock_Season_Com']
-_collection=['Rep_3_Investors','Rep_Stock_Exchange','Rep_Stock_Holder','Rep_Stock_Season_Com','Rep_Stock_dividind_Com']
+_collection=['Rep_3_Investors','Rep_Stock_Exchange','Rep_Stock_Holder','Rep_Stock_Season_Com','Rep_Stock_dividend_Com','Rep_3_Investors_OI']
 
 
 ### for season setting
@@ -87,7 +87,8 @@ _collection_list= Atlas_mongodb_insert.Get_Collection_Names(_db)
 for _collection in _collection_list :
 
 
-    if _collection == 'Rep_Stock_Holder' :
+    #if _collection == 'Rep_Stock_Holder' :
+    if _collection == 'Rep_Stock_Holder' or _collection == 'Rep_3_Investors_OI':
 
        _dicct={"date" : {"$gte":  _date }}
 
@@ -97,7 +98,7 @@ for _collection in _collection_list :
        _dicct={"years" : str(yy) , "season" : str(season)}
 
 
-    elif  _collection == 'Rep_Stock_dividind_Com':
+    elif  _collection == 'Rep_Stock_dividend_Com':
 
        #_dicct={"years" : str(yy)}
        _dicct={}
