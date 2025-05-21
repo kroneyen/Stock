@@ -17,7 +17,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.font_manager import fontManager
-
+import random
 
 # 改style要在改font之前
 plt.style.use('seaborn')
@@ -31,8 +31,8 @@ del_png.del_images()
 
 
 today_week = datetime.date.today().strftime("%w")
-mail_time = "18:00:00"
-#mail_time = "09:00:00"
+#mail_time = "18:00:00"
+mail_time = "09:00:00"
 
 """
 def get_redis_data():
@@ -93,9 +93,9 @@ def monthly_report():
 
      #headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36'}
      report_day = datetime.date.today() + relativedelta(months=-1)
-     url   ='https://mops.twse.com.tw/nas/t21/sii/t21sc03_' + str(report_day.year - 1911) + '_' + str(report_day.month) +'_0.html'
+     url   ='https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_' + str(report_day.year - 1911) + '_' + str(report_day.month) +'_0.html'
      ###上櫃
-     url_1 ='https://mops.twse.com.tw/nas/t21/otc/t21sc03_' + str(report_day.year - 1911) + '_' + str(report_day.month) +'_0.html'
+     url_1 ='https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_' + str(report_day.year - 1911) + '_' + str(report_day.month) +'_0.html'
      today_week = datetime.date.today().strftime("%w")
      #mail_time = "21:00:00"
      
@@ -104,7 +104,9 @@ def monthly_report():
      df_report = pd.DataFrame()
      for url_index in url_list :
          r = requests.get(url_index,  headers={ 'user-agent': user_agent.random } )
-         r.encoding = 'big5'
+         #print("encoding: %s" % r.encoding)
+         #r.encoding = 'big5'
+         r.encoding = 'big5-hkscs'  ### big5 extensions code
          report_table = pd.read_html(r.text)
           
          for index in range(2,len(report_table),2):
@@ -124,19 +126,25 @@ def monthly_report():
 
      df_report['公司代號'] = df_report['公司代號'].astype('str')
 
-     match_row = df_report[df_report['公司代號'].isin(com_lists)]
+     #match_row = df_report[df_report['公司代號'].isin(com_lists)]
+     match_row = df_report.copy()
      #match_row = match_row.sort_values(by=['累計YoY(%)'],ascending = False,ignore_index = True) 
 
      df_report = pd.DataFrame()
+     df_report_100 = pd.DataFrame()
      df_report = match_row.iloc[:,[0,1,4,7]].copy()       
      df_report['當月營收(百萬)']= round(match_row['當月營收']/1000,2)
      df_report['去年當月(百萬)']= round(match_row['去年當月營收']/ 1000,2)
-     df_report['當月累計(千萬)'] = round(match_row['當月累計營收']/ 1000000,2)
-     df_report['去年累計(千萬)'] = round(match_row['去年累計營收']/ 1000000,2)    
+     df_report['當月累計(億萬)'] = round(match_row['當月累計營收']/ 1000000,2)
+     df_report['去年累計(億萬)'] = round(match_row['去年累計營收']/ 1000000,2)    
      df_report = df_report.iloc[:,[0,1,4,5,2,6,7,3]]
-     df_report = df_report.sort_values(by=['累計YoY(%)'],ascending = False,ignore_index = True)
-     #return match_row.iloc[:,[0,1,8,9,4,10,11,7]]
-     return df_report,report_day
+     df_report = df_report.sort_values(by=['累計YoY(%)'],ascending = False,ignore_index = True) ### all company
+     df_report_com =  df_report[df_report['公司代號'].isin(com_lists)].reset_index(drop=True)  ### filter com_lists
+
+     if  int(datetime.date.today().day) < 10 : 
+         df_report = df_report.head(100)
+
+     return df_report_com , df_report , report_day
 
 
 def Plot_Rep_Stock_Month(report,report_day) :
@@ -193,28 +201,44 @@ def Plot_Rep_Stock_Month(report,report_day) :
 
 
 
-report ,report_day = monthly_report()
+report ,report_100 , report_day = monthly_report()
 
 mail_month =str(report_day.month)
-#print('report:',report)
-#print('report_day:',report_day)
 mail_date =  datetime.date.today()
 
 
-if not report.empty :
+for rep_idx in [0,1] : 
 
-    Plot_Rep_Stock_Month(report,report_day)
+  if  not report_100.empty :
+
+    if  rep_idx == 0 :
+
+         Plot_Rep_Stock_Month(report,report_day)
+ 
+    else  :
+
+       report = report_100.copy() 
 
 
-    #for idx in list(range(0, 8)) :
-    for idx in [0,4,7] :
-        if idx == 4 or  idx == 7 :
+    for idx in range(0,len(report.columns)) :
+
+        if idx == 0 :
+
+           report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<a href="https://tw.stock.yahoo.com/quote/%s/revenue" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+  
+        
+
+        elif idx == 4 or  idx == 7 :
            #report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
            report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 
-        elif idx == 0 :
-           
-           report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<a href="https://tw.stock.yahoo.com/quote/%s/revenue" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+        else :
+
+             if  idx > 1 : 
+
+                 report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else  x)
+
+
 
 
 
@@ -231,6 +255,10 @@ if not report.empty :
       print('stock_month_%s_report' % mail_month)
       print(report)
 
-else :
+  else :
       print('stock_month_%s_report not result' % mail_month)
+
+  time.sleep(random.randrange(3, 5, 1))  
+  ### del images/*.png
+  del_png.del_images()
  
