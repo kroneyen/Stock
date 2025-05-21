@@ -560,7 +560,8 @@ def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
      ### merge   
      df_merge = pd.merge(dfs_Investors,dfs, on = ['code'],how='left')
 
-     df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if pd.notnull(x['price']) else  round(float(x['price']) / float(x['the_year']),2),axis =1  )
+     #df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if pd.notnull(x['price']) and x['the_year'] != 0 else  round(float(x['price']) / float(x['the_year']),2),axis =1  )
+     df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if (x['price'] !=0 ) and (x['the_year'] != 0)  else  0 ,axis =1  )
      ### select column 
      df_merge = df_merge.iloc[:,[1,7,8]]
      df_merge=df_merge.sort_values(by=['PE'],ascending = True,ignore_index = True)
@@ -599,7 +600,7 @@ def Reasonable_Price(limit_y) :
 
 
 
-   last_5years_doc = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct ) 
+   last_5years_doc = read_aggregate_mongo_db('stock','Rep_Stock_dividend_Com',_dicct ) 
 
    last_5years = list(last_5years_doc)[0].get("_id")
 
@@ -612,7 +613,7 @@ def Reasonable_Price(limit_y) :
                            ,"_id" :0  } } ]
 
 
-   mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct)
+   mydoc_stock_season = read_aggregate_mongo_db('stock','Rep_Stock_dividend_Com',_dicct)
 
    df = pd.DataFrame(list(mydoc_stock_season))
    ### code	avg	stock_avg
@@ -998,7 +999,7 @@ for idx_com in [com_list, com_lists] :
                                                                                                                                                                                                                              
        columns_stock_season_div={'_id':0,'years':0,'code_name':0}                                                                                                                                                                 
                                                                                                                                                                                                                              
-       mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividind_Com',dict_stock_season_div ,columns_stock_season_div)                                                                                             
+       mydoc_stock_season_diviended = read_mongo_db('stock','Rep_Stock_dividend_Com',dict_stock_season_div ,columns_stock_season_div)                                                                                             
        """                                                                                                                                                                                                                        
        _dicct = [{"$match" :  { "years"  : { "$eq" : str(today.year) } } }                                                                                                                                                        
                    ,{ "$sort" : {"dividend_date" : 1 , "dividend_stock_date" :1}}                                                                                                                                                 
@@ -1009,7 +1010,7 @@ for idx_com in [com_list, com_lists] :
                ,{ "$project" : { "code" : "$_id"  ,"cash_dividend" : "$cash_sum" , "dividend_date" : "$last_dividend_date" ,"stock_dividend" : "$stock_sum" , "dividend_stock_date" : "$last_dividend_stock_date"  ,"_id" :0  } }]
                                                                                                                                                                                                                              
                                                                                                                                                                                                                              
-       mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividind_Com',_dicct )                                                                                                                          
+       mydoc_stock_season_diviended  = read_aggregate_mongo_db('stock','Rep_Stock_dividend_Com',_dicct )                                                                                                                          
                                                                                                                                                                                                                              
        df =  match_row.copy()                                                                                                                                                                                                     
                                                                                                                                                                                                                              
