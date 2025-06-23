@@ -741,8 +741,9 @@ except :
    ### got redis data from local
    redis_lists = get_redis_data("com_lists","hkeys",'NULL','NULL') ## get  redis data
    for  idx in redis_lists :
-        if not re.match("(\w+_p$)", idx) :
-           com_lists.append(idx)
+         #if not re.match("(\w+_p$)", idx) :
+         if  re.match("(\w+:code$)", idx) :
+             com_lists.append(idx)
 
 
    com_list = get_redis_data("com_list","lrange",0,-1) ## get  redis data
