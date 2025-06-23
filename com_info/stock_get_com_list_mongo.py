@@ -151,7 +151,8 @@ def Get_Com_List_v1(rows) :
 
 def get_com_auth_stock() : 
 
-  url = 'https://mops.twse.com.tw/mops/web/ajax_t51sb01'
+  #url = 'https://mops.twse.com.tw/mops/web/ajax_t51sb01'
+  url = 'https://mopsov.twse.com.tw/mops/web/ajax_t51sb01'
   dfs = pd.DataFrame()
   types =  ['sii','otc']
   for type in types :
@@ -197,6 +198,24 @@ for index in range(len(com_lists)) :
 
 com_lists = get_com_auth_stock()
 
+### insert to redis 
+
+delete_redis_data('com_lists')
+
+for index in range(len(com_lists)) :
+   ### for dic {1234 : "stock_name" , 1234_p : "otc" , 1234_au : "auth_stock" }
+
+   #_values = { str(com_lists.iloc[index,0]) :  str(com_lists.iloc[index,1]) , str(com_lists.iloc[index,0]) + '_au' : str(com_lists.iloc[index,2] ) ,  str(com_lists.iloc[index,0]) + '_p' :  str(com_lists.iloc[index,3])  }
+   _values = {  str(com_lists.iloc[index,0])+':code' :  str(com_lists.iloc[index,1]) , str(com_lists.iloc[index,0]) + ':auth_stock' : str(com_lists.iloc[index,2] ) , str(com_lists.iloc[index,0]) +':type' :  str(com_lists.iloc[index,3])  }
+
+   insert_redis_data("com_lists",_values )
+
+time.sleep(random.randrange(1, 3, 1))
+
+
+### insert to local mongo & altas mongo 
+
+
 drop_mongo_db('c','stock','com_lists')
 drop_mongo_db('conn','stock','com_lists')
 time.sleep(random.randrange(1, 3, 1))
@@ -205,12 +224,6 @@ time.sleep(random.randrange(1, 3, 1))
 _values_lists=[]
 
 for index in range(len(com_lists)) : 
-   # print(str(df.iloc[index,0])+' "' +str(df.iloc[index,1])+'" ',str(df.iloc[index:0])+'_p "'+str(df.iloc[index:2])+'"')
-   ### for dic {1234 : "aaa" , 1234_p : "otc"}
-   #print(com_lists.iloc[index,0])
-   #auth_stock_data = get_com_auth_stock(com_lists.iloc[index,0])
-   #print('got data:',auth_stock_data)
-   #_values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'type' : str(com_lists.iloc[index,2]),'last_modify':datetime.now() }
    _values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'auth_stock' : str(com_lists.iloc[index,2]),'type' : str(com_lists.iloc[index,3]),'last_modify':datetime.now() }
    _values_lists.append(_values)
 
