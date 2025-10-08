@@ -18,11 +18,15 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.font_manager import fontManager
-
+import pandas_table as pd_table
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -125,7 +129,7 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 
     for url in url_list : 
        dfs=pd.DataFrame()
-       r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
+       r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False)
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -207,7 +211,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
        ##print('payload:',payload)
        dfs = pd.DataFrame()
-       r =  requests.post(url ,params=payload ,  headers=headers)
+       r =  requests.post(url ,params=payload ,  headers=headers ,verify=False)
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -649,7 +653,9 @@ for idx_com in [com_list, com_lists] :
      
      
         for idx in range(0,len(match_row.columns)) :
-     
+    
+            match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
+
             if idx == 0 :
      
                 match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID=%s&RPT_CAT=M_FYEA" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
@@ -674,7 +680,7 @@ for idx_com in [com_list, com_lists] :
             last_sst = "EPS_{}_Q{}".format(int(s_year)-1,s_season)
      
             match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
-     
+            match_row = pd_table.add_columns_into_row(match_row ,20) 
             body = match_row.to_html(classes='table table-striped',escape=False)
             send_mail.send_email('{year}_Stock_Q{season}_Report' .format(year = s_year ,season=s_season) ,body)
         else :
