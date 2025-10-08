@@ -1,4 +1,4 @@
-#! /usr/bin/env python3.6
+#! /usr/local/python-3.9.2/bin/python3.9
 # -*- coding: utf-8 -*-
 import pandas as pd
 from datetime import datetime, timedelta
@@ -19,11 +19,15 @@ import del_png
 import random
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
+import tg_bot 
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -184,10 +188,11 @@ def send_tg_bot_photo(token,chat_id,msg,img_url):
   #files={'photo': open(file_path, 'rb')}
   #files = open(file_path,'rb') 
   #url = "https://api.telegram.org/bot{token}/sendPhoto?chat_id={chat_id}&caption={msg}&files={files}".format(token = token ,chat_id=chat_id,msg=msg,files=files)
-  img_url ='https://ibb.co/0q1cZWb'
-  url = "https://api.telegram.org/bot{token}/sendPhoto?chat_id={chat_id}&caption={msg}&photo={img_url}".format(token = token ,chat_id=chat_id,msg=msg,img_url=img_url)
+  #img_url ='https://ibb.co/0q1cZWb'
+  #url = "https://api.telegram.org/bot{token}/sendPhoto?chat_id={chat_id}&caption={msg}&photo={img_url}".format(token = token ,chat_id=chat_id,msg=msg,img_url=img_url)
+  url = f"https://api.telegram.org/bot{token}/sendPhoto?chat_id={chat_id}&caption={msg}".format(token = token ,chat_id=chat_id,msg=msg)
   #print(url)
-  requests.post(url)
+  requests.post(url,files={'photo':img_url})
 
 
 
@@ -202,7 +207,7 @@ def Rep_3_Investors_OI(date):
     #prin(type(q_date))
     #url = 'https://www.taifex.com.tw/cht/3/futContractsDate?queryDate={}%2F{}%2F{}'.format(date.year, date.month,date.day)
     url = 'https://www.taifex.com.tw/cht/3/futContractsDate?queryDate='+ q_date
-    r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
+    r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
     if r.status_code == requests.codes.ok:
         soup = BeautifulSoup(r.text, 'html.parser')
     else:
@@ -265,9 +270,12 @@ def Rep_3_Investors_OI(date):
 
 
 
-def polt_3_Investors_OI(date): 
+def polt_3_Investors_OI(date,today_date): 
  
    #last_modify =start_date
+
+   ### del images/*.png
+   del_png.del_images()
 
    mydoc = read_mongo_db('stock','Rep_3_Investors_OI',{'date': {'$gte' : date}},{'_id':0})
  
@@ -286,7 +294,7 @@ def polt_3_Investors_OI(date):
          xycoords = ax.get_yaxis_transform(), textcoords="offset points",                    
          size=10, va="center")                                                               
                                                                                              
-   plt.savefig('./images/image_Rep_3_Investors_OI_'+ date +'.png' )
+   plt.savefig('./images/image_Rep_3_Investors_OI_'+ today_date +'.png' )
    plt.clf()
 
    return df
@@ -308,7 +316,8 @@ def get_mongo_last_date(cal_day):
 
 
 def match_row_5 ( get_updatetime ,match_row,extend ) :
-
+          
+          """ 
           line_key_list =[]
           tg_key_list=[]
           tg_chat_id=[]
@@ -316,25 +325,43 @@ def match_row_5 ( get_updatetime ,match_row,extend ) :
           line_key_list.append( get_redis_data('line_key_hset','hget','Stock_YoY','NULL')) ## for exchange_rate (Stock_YoY/Stock/rss_google/Exchange_Rate)
           tg_key_list.append(get_redis_data('tg_bot_hset','hget','@stock_broadcast_2024bot','NULL')) ## for tg of signle
           tg_chat_id.append(get_redis_data('tg_chat_id','hget','stock_broadcast','NULL')) ## for tg of signle
+          """
 
           for match_row_index in range(0,len(match_row),5) :
               msg = get_updatetime + extend  + match_row.iloc[match_row_index:match_row_index+5,:].to_string(index = False)  ## for line notify msg 1000  character limit 
               tg_msg ="【3_Investors_OI】"+  msg
 
+ 
+          ### for tg_msg
+          tg_bot.send_tg_bot_msg(tg_msg)
+          time.sleep(random.randrange(1, 3, 1))
+
+          ### for  tg_photo
+          tg_caption="【3_Investors_OI】" + get_updatetime
+          tg_file='./images/image_Rep_3_Investors_OI_' + get_updatetime + '.png'
+          tg_bot.send_tg_bot_photo(tg_caption,tg_file) 
+
+    
+          """
               ### for multiple line group
               for line_key in  line_key_list : ## 
                   send_line_notify(line_key, msg)
                   time.sleep(random.randrange(1, 3, 1))
 
               for tg_key in  tg_key_list : ## 
-                  send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)
+                  #send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)
+                  tg_bot.send_tg_bot_msg(tg_msg)
                   time.sleep(random.randrange(1, 3, 1))
-
-                  #tg_caption='test_png'
-                  #tg_file=open('./images/image_Rep_3_Investors_OI_'+ ddate +'.png','rb') 
-                  #tg_file=open('images/image_Rep_3_Investors_OI_'+ ddate +'.png','rb' )
-             
+                  
+                  tg_caption="【3_Investors_OI】" + get_updatetime
+                  #tg_file='./images/image_Rep_3_Investors_OI_' + get_updatetime + '.png'
+                  #tg_file=open('./images/image_Rep_3_Investors_OI_20250515.png', 'rb')
+                  #tg_file=open('./images/image_Rep_3_Investors_OI_' + get_updatetime + '.png', 'rb')
+                  tg_file='./images/image_Rep_3_Investors_OI_' + get_updatetime + '.png'
                   #send_tg_bot_photo(tg_key,tg_chat_id[0],tg_caption,tg_file)  
+                  #print('tg_caption:',tg_caption , 'tg_file:',tg_file)
+                  tg_bot.send_tg_bot_photo(tg_caption,tg_file) 
+          """     
 
 
 ### Main Code 
@@ -364,12 +391,14 @@ while start_date <= today :
  
 
 ddate = get_mongo_last_date(5)
+today_date = get_mongo_last_date(1)
 
-match_row = polt_3_Investors_OI(ddate)
+match_row = polt_3_Investors_OI(ddate,today_date)
 
 match_row = match_row[::-1] ### for reverse data
 
-match_row_5("\n", match_row,"\n ")
+#match_row_5("\n", match_row,"\n ")
+match_row_5(today_date , match_row,"\n ")
 
 
 
@@ -383,7 +412,7 @@ if datetime.today().isoweekday() == 5 :
      ### get last day 
      ddate = get_mongo_last_date(30)
 
-     mail_match_row = polt_3_Investors_OI(ddate)
+     mail_match_row = polt_3_Investors_OI(ddate,today_date)
 
      match_row = match_row[::-1] ### for reverse data
 

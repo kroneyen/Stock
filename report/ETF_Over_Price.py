@@ -10,7 +10,10 @@ import redis
 import random
 from pymongo import MongoClient
 from fake_useragent import UserAgent
-
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
 r = redis.StrictRedis(connection_pool=pool)
@@ -104,10 +107,11 @@ def ETF_Over_Price(today):
   user_agent = UserAgent()
 
   dfs =pd.DataFrame()
-  r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
+  r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
   r.encoding = 'utf8'
  
-  doc = pd.read_json(url)['a1']                                                                       
+  #doc = pd.read_json(url)['a1']                                                                       
+  doc = pd.read_json(StringIO(r.text))['a1']                                                                       
   for idx in range(0,len(doc)-1,1) :                                                                  
                                                                                                       
     df = pd.DataFrame(data=doc[idx]['msgArray'],columns=['a','b','c','d','e','f','g','h','i','j','k'])
@@ -129,6 +133,7 @@ def ETF_Over_Price(today):
 today = datetime.now()
 
 match_row=ETF_Over_Price(today)
+
 
 
 if today.hour < 18  :

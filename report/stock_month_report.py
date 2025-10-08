@@ -18,9 +18,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.font_manager import fontManager
 import random
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -103,11 +108,11 @@ def monthly_report():
      url_list = [url,url_1]
      df_report = pd.DataFrame()
      for url_index in url_list :
-         r = requests.get(url_index,  headers={ 'user-agent': user_agent.random } )
+         r = requests.get(url_index,  headers={ 'user-agent': user_agent.random },verify=False )
          #print("encoding: %s" % r.encoding)
          #r.encoding = 'big5'
          r.encoding = 'big5-hkscs'  ### big5 extensions code
-         report_table = pd.read_html(r.text)
+         report_table = pd.read_html(StringIO(r.text))
           
          for index in range(2,len(report_table),2):
            df_table = report_table[index]
@@ -154,8 +159,8 @@ def Plot_Rep_Stock_Month(report,report_day) :
 
    the_years_df = pd.DataFrame()
    last_years_df = pd.DataFrame() 
-
    dfs = report.rename(columns={'公司代號': 'cdoe' ,'公司名稱' : 'code_name' ,'當月營收(百萬)': 'the_month' , '去年當月(百萬)' : 'last_month', '累計YoY(%)' : 'T_YoY(%)'})
+   
    dfs['x_code']= dfs.apply(lambda x: x['cdoe']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
    ### x_code,the_month/last_month/累計YoY(%)
    the_years_df = dfs.iloc[:,[8,2,7]].copy() 
@@ -206,12 +211,13 @@ report ,report_100 , report_day = monthly_report()
 mail_month =str(report_day.month)
 mail_date =  datetime.date.today()
 
-
+#print(report.info())
+#print(report_100.info())
 for rep_idx in [0,1] : 
 
   if  not report_100.empty :
 
-    if  rep_idx == 0 :
+    if  rep_idx == 0 and (not report.empty):
 
          Plot_Rep_Stock_Month(report,report_day)
  
@@ -219,6 +225,8 @@ for rep_idx in [0,1] :
 
        report = report_100.copy() 
 
+    
+    #print(report.info())
 
     for idx in range(0,len(report.columns)) :
 
@@ -229,6 +237,10 @@ for rep_idx in [0,1] :
         
 
         elif idx == 4 or  idx == 7 :
+
+           report[report.columns[idx]] = report[report.columns[idx]].astype(object) 
+           #report.iloc[:, idx] = report.iloc[:, idx].astype(object)
+           #print(report.info())
            #report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
            report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
 

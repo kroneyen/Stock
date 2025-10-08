@@ -17,10 +17,14 @@ from matplotlib.font_manager import fontManager
 from fake_useragent import UserAgent
 import del_png
 import numpy as np
-
+import pandas_table as pd_table
+import re 
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -146,16 +150,18 @@ def get_Rep_Stock_Holder(com_num):
     url ='https://opendata.tdcc.com.tw/getOD.ashx?id=1-5'
 
     #res = requests.get(url, headers=headers )
-    res = requests.get(url,  headers={ 'user-agent': user_agent.random } )
+    res = requests.get(url,  headers={ 'user-agent': user_agent.random } ,verify=False )
     df = pd.read_csv(StringIO(res.text))
     df = df.astype(str)
-    
+    ### fix bug code space  "code" : "1326  "
+    df['證券代號'] = df['證券代號'].apply(lambda x : x.replace(' ','')  if pd.notnull(x) else x ) 
+
     if com_num == 'nan' :
+
       com_list = read_mongo_db('stock','com_list',{},{'code':1,'_id':0})
       my_doc_list = pd.DataFrame(list(com_list)) ##cours to dric
-          
-      #df = df[df['證券代號'].isin(list(my_doc_list['code']))]
-      df = df[df['證券代號'].str.replace(' ','').isin(list(my_doc_list['code']))]
+      df = df[df['證券代號'].isin(list(my_doc_list['code']))]
+
     else : 
    
       df = df[df['證券代號'].isin([com_num])] 
@@ -164,8 +170,6 @@ def get_Rep_Stock_Holder(com_num):
         '證券代號': 'stock_id',
         '股數': '持有股數', '占集保庫存數比例%': '占集保庫存數比例'
     })
-   
-    
     # 官方有時會有不同格式誤傳，做例外處理
     if '占集保庫存數比例' not in df.columns:
         df = df.rename(columns={'佔集保庫存數比例%': '占集保庫存數比例'})
@@ -251,6 +255,25 @@ def cal_level_min(code ,cal_day) :
     return level_min ,level_stock,avgprice                                           
 
 
+def per_growth_decline(match_data,opt):
+
+    chk = 0     
+
+    for idx in [7,9,11,13,15] :
+
+           if re.search(opt ,match_data.iloc[idx]) or match_data.iloc[idx] == "0.0" : 
+
+              chk = 0 
+              break 
+
+
+           else :
+              
+              chk +=1
+
+    return  chk
+      
+   
 
 
 def plot_Rep_Stock_Holder_code() : 
@@ -267,7 +290,7 @@ def plot_Rep_Stock_Holder_code() :
       ## mongo last date from Rep_Stock_Holder to lists
       cal_day = date_lists[len(date_lists)-1]   ## get first day 
       last_day = date_lists[0] ## get last day
-
+      #print(cal_day , last_day)
       ### get all code & name  of last day 
       
       #last_day_dicct = [ {'$match':  { 'last_modify' : last_day } }, {'$group': { '_id' : { 'code' : '$code' , 'name' : '$name' } } } ]
@@ -353,7 +376,7 @@ def plot_Rep_Stock_Holder_code() :
       #plot_data_df = plot_data_df.sort_values(by=['level_min','avg_price'],ascending=[False,True] ,ignore_index = True)
 
       ######## for email table #########
-
+      #print(dfs.info())
       ### sum_percentage data type trans to float
       for idx in range(5,len(dfs.columns),1) :
          dfs[dfs.columns[idx]] = dfs[dfs.columns[idx]].fillna(0).astype('float')
@@ -362,7 +385,8 @@ def plot_Rep_Stock_Holder_code() :
       for idx in range(1,6,1) : 
         
          dfs[str(dfs.columns[idx+5]) + '%'] = round((dfs.iloc[:,idx+5] - dfs.iloc[:,idx+4])/ dfs.iloc[:,idx+4] *100 ,2)
-   
+  
+      #print(dfs.info()) 
       ## resort columns   
       dfs = dfs.iloc[:,[0,1,2,3,4,5,6,11,7,12,8,13,9,14,10,15]].fillna(0)
       dfs = dfs.sort_values(by=dfs.columns[15],ascending=False,ignore_index=True)
@@ -414,9 +438,9 @@ def plot_Rep_Stock_Holder_code() :
 ### get url  & insert into mongo 
 match_row = get_Rep_Stock_Holder('nan')
 
-
 records = match_row.copy()
 ### get records date 
+#print(records.info())
 records_date = records.iloc[0,0]
 
 Holder_last_day = get_mongo_cal_date(1,'Rep_Stock_Holder')
@@ -454,7 +478,15 @@ for  idx in [0,7,9,11,13,15] :
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://norway.twsthr.info/StockHolders.aspx?stock=%s" target="_blank">%s</a>' %(x ,x)  if int(x) >0  else  x)
 
     else :
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+
+           match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
+
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x  if x < 0 else str(x) )
+
+           if idx == 15 : 
+              ### change stock name of growth filter "green" , decline  filter "red"   
+              match_row.iloc[:,1] =  match_row.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>'  % x['name'] if  per_growth_decline(x,'green') > 0  else  x['name'] ,axis = 1 )
+              match_row.iloc[:,1] =  match_row.apply(lambda  x: f'<p style="background-color:SpringGreen;">%s</p>'  % x['name'] if  per_growth_decline(x,'red') > 0  else  x['name'] ,axis = 1 )
 
 
 
@@ -464,6 +496,8 @@ for  idx in [0,7,9,11,13,15] :
 if (time.strftime("%H:%M:%S", time.localtime()) > mail_time)  :
 
     if not match_row.empty :
+
+       match_row = pd_table.add_columns_into_row(match_row ,20)
        body = match_row.to_html(escape=False)
        send_mail.send_email('Rep_Stock_Holder_%s' % last_day ,body)
 

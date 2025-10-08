@@ -23,10 +23,14 @@ import random
 import del_png
 import numpy as np
 import os
-
+import pandas_table as pd_table
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -35,7 +39,11 @@ options = webdriver.ChromeOptions()
 options.add_argument("--headless")
 options.add_argument('--disable-dev-shm-usage')
 options.add_argument("--no-sandbox")
-prefs = {"download.default_directory":"./Dividend_file"}
+options.add_argument("--disable-gpu")
+file_path = os.getcwd() + '/Dividend_file'
+#prefs = {"download.default_directory":"./KD_file" ,"savefile.default_directory" : "./KD_file","download.directory_upgrade": True,} ###selenium 4.X
+prefs = {"download.default_directory":file_path ,"savefile.default_directory" : file_path,"download.directory_upgrade": True,} ###selenium 4.X
+#prefs = {"download.default_directory":"./Dividend_file"}
 options.add_experimental_option("prefs",prefs)
 web = webdriver.Chrome(options=options)
 
@@ -202,7 +210,7 @@ def Dividend(year,com_lists) :
 
     r = requests.get(url, headers= headers)
 
-    dfs = pd.read_html(r.text)[0]
+    dfs = pd.read_html(StringIO(r.text))[0]
 
 
 
@@ -214,102 +222,148 @@ def Dividend(year,com_lists) :
 
 def Dividend_goodinfo(years) :
 
-    url = 'https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR='+str(years)
-    
-    ### save Dividend_file path
-    old = './Dividend_file/SaleMonDetail.html'
-    file_html = './Dividend_file/'+str(years)+'_SaleMonDetail.html'
+    #url = 'https://goodinfo.tw/tw/StockDividendScheduleList.asp?MARKET_CAT=%E5%85%A8%E9%83%A8&INDUSTRY_CAT=%E5%85%A8%E9%83%A8&YEAR='+str(years)
+    url_future = 'https://goodinfo.tw/tw2/StockList.asp?MARKET_CAT=%E6%99%BA%E6%85%A7%E9%81%B8%E8%82%A1&INDUSTRY_CAT=%E5%8D%B3%E5%B0%87%E9%99%A4%E6%AC%8A%E6%88%96%E9%99%A4%E6%81%AF'
+    url_done = 'https://goodinfo.tw/tw2/StockList.asp?RPT_TIME=&MARKET_CAT=%E6%99%BA%E6%85%A7%E9%81%B8%E8%82%A1&INDUSTRY_CAT=%E5%B7%B2%E9%99%A4%E6%AC%8A%E6%88%96%E9%99%A4%E6%81%AF'
+    	
+    url_idx = 0
+    df_concat =pd.DataFrame()
+    	
+    for url in  [url_done,url_future] :
+         ### save Dividend_file path
+         
+         #old = './Dividend_file/StockList.html'
+         old = file_path +'/StockList.html'
 
-    
-    start = time.time()
+         if url_idx == 0 : 
+           
+            #file_html = './Dividend_file/'+str(years)+'_done_StockList.html'
+            file_html = file_path + '/'+str(years)+'_done_StockList.html'
+            #columns_list=[0,1,7,6,16,15,9]
+         
+         else : 
+            	 
+            #file_html = './Dividend_file/'+str(years)+'_future_StockList.html'
+            file_html = file_path +'/'+str(years)+'_future_StockList.html'
+            #columns_list=[0,1,7,6,16,15] 
+         
+         
+         start = time.time()
 
-    web.get(url)
-    time.sleep(random.randrange(3, 5, 1))
+         download_times = 3
+         for check in range(0 ,download_times) : 
+             web.get(url)
+             time.sleep(random.randrange(10 ,20, 1))
+         
+             html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr[5]/td[2]/input[3]'
+             ads_button = "ats-interstitial-button"
+             ### download file
 
-    #html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/table/tbody/tr/td/div/form/nobr[4]/input[2]'
-    html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr/td/div/form/nobr[4]/input[2]'
-    ### download file
-    file_download = WebDriverWait(web, 10).until(EC.element_to_be_clickable((By.XPATH,html_d)))
-    file_download.click()
+             try :
 
-    if  os.path.exists(old) :
-        pass
+                 ads_iframe_close =  WebDriverWait(web, 5).until(EC.element_to_be_clickable((By.ID,ads_button)))
+                 ads_iframe_close.click()
+                 time.sleep(random.randrange(3, 5, 1))
+                 print('have ads')
+             except : 
+                continue 
+ 
+             finally  : 
+                file_download = WebDriverWait(web, 15).until(EC.element_to_be_clickable((By.XPATH,html_d)))
+                #time.sleep(random.randrange(3, 5, 1))
+                file_download.click()
 
-    else : 
-       time.sleep(random.randrange(5, 10, 1))
-       #print('need to waiting')
-
-    os.rename(old, file_html)
-    #print(f"time: {time.time() - start} (s)")
-    file_html = './Dividend_file/'+str(years)+'_SaleMonDetail.html' 
-
-    df = pd.read_html(file_html)[0] ## []list to pandas
-    ### Filter columns
-    """
-    dfs = df.iloc[:,[1,2,15,4,18,9]]
-    dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date']
-    """
-    dfs = df.iloc[:,[1,2,15,4,18,9,5]]
-    dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date','price']
-
-
-    #year = "'"+ url_html.split("_")[0][2:4] +"/"
-    year = "'"+ str(years)[2:4] +"/"
-
-    ### avoid chaining SettingWithCopyWarning
-    #dfs = dfs.copy()
-    dfs = dfs[dfs['dividend_date'].str.contains(year, na=False)] ## filter not match years
-
-    #dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace(' 即將除息','').replace(' 今日除息','').replace(year,"")  if pd.notnull(x) and re.match(year, x)  else np.NAN  )
-    dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace('即將除息','').replace('今日除息','').replace(year,"").replace(r'\s+','')  if pd.notnull(x) and re.match(year, x)  else np.NAN  )
-    #dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace(year,"")  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.NAN if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
-    dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace('即將除權','').replace('今日除權','').replace(year,"").replace(r'\s+','')  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.NAN if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
-
-    dfs['dividend_date'] = dfs.apply(lambda x : checked(x['cash_dividend'],x['dividend_date']) ,axis=1 )
-    dfs['cash_dividend'] = dfs.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
-    dfs['dividend_stock_date'] = dfs.apply(lambda x : checked(x['stock_dividend'],x['dividend_stock_date']) ,axis=1 )
-    dfs['stock_dividend'] = dfs.apply(lambda x : dividend_checked(x['stock_dividend']) ,axis=1 )
-
-    dfs['years'] = dfs['code'].apply(lambda x: str(years)  if pd.notnull(x)  else np.NAN )
-
-    
-    ### get mongo data
-
-    _dictt = { "years" : str(years)}
-
-    _values = { "_id" :0 , "code" :1 }
-
-    mydoc = read_mongo_db('stock','Rep_Stock_dividend_Com',_dictt,_values)
-
-    df_mydoc = pd.DataFrame(list(mydoc))
-
-    if not df_mydoc.empty : 
-
-      df_merge = df_mydoc.merge(dfs,how='left', on='code')
-
-
-    else :
-
-      df_merge = dfs.copy()
-
-    ##remove duplicate code 
-    df_merge.dropna(subset=['cash_dividend'],inplace = True)
-
-    #com_list = df_merge['code'].drop_duplicates().tolist()
-    #d_dictt = { "years" : str(years) ,"code" : {"$in" : com_list } }
-    
-    #print('d_dictt:',com_list)
-    """ 
-    delete_many_mongo_db('stock','Rep_Stock_dividend_Com',d_dictt)
-    records = df_merge.copy()
-    records =records.to_dict(orient='records')
-    insert_many_mongo_db('stock','Rep_Stock_dividend_Com',records)
-    """
-    #return dfs.sort_values(by=['dividend_date'],ascending = False,ignore_index = True)
-
+                time.sleep(random.randrange(5, 10, 1))
+        
+                if  os.path.exists(old) :
+                    break
+         
+                else : 
+                    web.close()  
+         os.rename(old, file_html)
+         df = pd.read_html(file_html)[0] ## []list to pandas
+         
+         ### Filter columns
+         
+         """
+         dfs = df.iloc[:,[1,2,15,4,18,9]]
+         dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date']
+         """
+         #dfs = df.iloc[:,[1,2,15,4,18,9,5]]
+         ### change web version 
+         dfs = df.iloc[:,[0,1,7,6,16,15,9]]
+                  	  	
+         dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date','price']
+         
+         
+         #year = "'"+ url_html.split("_")[0][2:4] +"/"
+         year = "'"+ str(years)[2:4] +"/"
+         
+         ### avoid chaining SettingWithCopyWarning
+         #dfs = dfs.copy()
+         dfs = dfs[dfs['dividend_date'].str.contains(year, na=False)] ## filter not match years
+         
+         #dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace(' 即將除息','').replace(' 今日除息','').replace(year,"")  if pd.notnull(x) and re.match(year, x)  else np.NAN  )
+         dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace('即將除息','').replace('今日除息','').replace(year,"").replace(r'\s+','')  if pd.notnull(x) and re.match(year, x)  else np.NAN  )
+         #dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace(year,"")  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.NAN if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
+         dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace('即將除權','').replace('今日除權','').replace(year,"").replace(r'\s+','')  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.NAN if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
+         
+         dfs['dividend_date'] = dfs.apply(lambda x : checked(x['cash_dividend'],x['dividend_date']) ,axis=1 )
+         dfs['cash_dividend'] = dfs.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
+         dfs['dividend_stock_date'] = dfs.apply(lambda x : checked(x['stock_dividend'],x['dividend_stock_date']) ,axis=1 )
+         dfs['stock_dividend'] = dfs.apply(lambda x : dividend_checked(x['stock_dividend']) ,axis=1 )
+         
+         dfs['years'] = dfs['code'].apply(lambda x: str(years)  if pd.notnull(x)  else np.NAN )
+         
+         
+         ### get mongo data
+         _dictt = { "years" : str(years)}
+         
+         _values = { "_id" :0 , "code" :1 }
+         
+         mydoc = read_mongo_db('stock','Rep_Stock_dividend_Com',_dictt,_values)
+         
+         df_mydoc = pd.DataFrame(list(mydoc))
+         
+         if not df_mydoc.empty :
+         
+           #df_merge = df_mydoc.merge(dfs,how='left', on='code')
+           df_merge = df_mydoc.merge(dfs,how='inner', on='code')
+         
+         
+         else :
+         
+           df_merge = dfs.copy()
+         
+         #df_merge = dfs.copy()
+         ##remove duplicate code 
+         df_merge.dropna(subset=['cash_dividend'],inplace = True)
+         
+         #com_list = df_merge['code'].drop_duplicates().tolist()
+         #d_dictt = { "years" : str(years) ,"code" : {"$in" : com_list } }
+         
+         #print('d_dictt:',com_list)
+         """ 
+         delete_many_mongo_db('stock','Rep_Stock_dividend_Com',d_dictt)
+         records = df_merge.copy()
+         records =records.to_dict(orient='records')
+         insert_many_mongo_db('stock','Rep_Stock_dividend_Com',records)
+         """
+         #return dfs.sort_values(by=['dividend_date'],ascending = False,ignore_index = True)
+         df_concat = pd.concat([df_concat, df_merge])
+         
+        
+         
+         url_idx += 1
+         
+         
+    df_concat = df_concat.drop_duplicates(subset=['code', 'cash_dividend','dividend_date'])
     web.quit()
+
     #return df_merge[df_merge["code"]== "2449"]
-    return df_merge
+    return df_concat
+
+
 
 
 def Dividend_twse():
@@ -380,9 +434,6 @@ def dividend_checked(x) :
 
       except:
         return 0
-
-
-
 
 
 ###5/15,8/14,11/14,3/31
@@ -457,14 +508,15 @@ div_data = Dividend_goodinfo(key_yy)
 #twse_data = Dividend_twse()
 
 #print(goodinfo_data.info())
+#print(div_data.info())
 
-
+div_data = div_data.astype({'cash_dividend':'float' ,'stock_dividend':'float' , 'price':'float'})
 div_data.columns= llist(len(div_data.columns))
 div_data = div_data.iloc[:,[0,2,3,4,5,6]].copy() ## adding price
 merge_data =div_data.iloc[:,[1,5]].copy() ### cash_dividend , price
 merge_data_name = list(merge_data.columns)
 div_data[6] = merge_data.apply(lambda  x:   round((x[merge_data_name[0]] + x[merge_data_name[1]]),2)  if   x[merge_data_name[0]]  > 0 else 0 ,axis=1) ### price = cash_dividend + price
-div_data[7] = merge_data.apply(lambda  x:   round(x[merge_data_name[0]] / (x[merge_data_name[0]] + x[merge_data_name[1]])*100 ,2)  if   x[merge_data_name[0]]  > 0 else 0 ,axis=1) ### price = cash_dividend + price
+div_data[7] = merge_data.apply(lambda  x:   round(x[merge_data_name[0]] / (x[merge_data_name[0]] + x[merge_data_name[1]])*100 ,2)  if   ( x[merge_data_name[0]]  > 0 and x[merge_data_name[1]] > 0 ) else 0 ,axis=1) ### price = cash_dividend + price
 
 div_data.rename(columns={0: 'code', 2:'cash_dividend',3: 'dividend_date',4: 'stock_dividend',5:'dividend_stock_date',6:'price',7 : 'yield'}, inplace=True)
 
@@ -477,7 +529,6 @@ div_data.rename(columns={0: 'code', 2:'cash_dividend',3: 'dividend_date',4: 'sto
 #print(div_data[div_data['code'] == "2449"])
 
 ## get com_list
-
 dictt = {}
 _columns= {"_id":0 , "code" : 1,"name" : 1}
 
@@ -488,34 +539,32 @@ com_df = pd.DataFrame(list(com_mydoc))
 
 com_df.rename(columns={'name' : 'code_name'}, inplace=True)
 
-
 div_doc = com_df.merge(div_data,how='left' ,on=['code'])
-
-
-
+#div_doc = div_doc.dropna(inplace = True)
+#print(div_data.info())
 ### cash_dividend NaN is 0 for history data
 #if yy < today.year :
 
 div_doc['cash_dividend']=div_doc['cash_dividend'].fillna(0)
 div_doc['stock_dividend']=div_doc['stock_dividend'].fillna(0)
 
-
-#match_row = div_doc.copy()
-
 match_row = div_doc.drop_duplicates(subset=['code', 'cash_dividend','dividend_date']).copy()
-match_row["years"]=str(key_yy)
+#match_row = div_data.drop_duplicates(subset=['code', 'cash_dividend','dividend_date']).copy()
+#match_row["years"]=str(key_yy)
 
-
+#print(div_data.info())
 
 if not match_row.empty  :
 
       records = match_row.copy()
+      #records_coms_list = list(div_data['code'])
 
       records["years"]  = str(key_yy)
       ### rename for mongodb
       records =records.to_dict(orient='records')
       ## coding  bec not include ROE ROA
       #del_filter = {"years":str(yy),"season":str(season)}
+      #del_filter = {"years":str(key_yy),'code': {"$in" : records_coms_list},"price" :  float("NaN")}
       del_filter = {"years":str(key_yy)}
      
       #print("del_filter:",del_filter)
@@ -545,19 +594,41 @@ mydoc = read_mongo_db_sort_limit('stock','Rep_Stock_dividend_Com',_dictt,_values
 match_row = pd.DataFrame(list(mydoc))
 
 
+### get mongodata Stock_Eps_Yield_PE_Daily 
+
+_dicct= {}
+_columns={"_id" :0 , "years" :0 }
+
+mydoc = read_mongo_db('stock','Stock_Eps_Yield_PE_Daily',_dicct,_columns) 
+mydoc_eps_daily = pd.DataFrame(list(mydoc))
+match_row = match_row.merge(mydoc_eps_daily,how='left', on='code')
+match_row = match_row.drop('years',axis=1)
+
+#print(match_row.info())
+
+
 #if not match_row.empty and time.strftime("%H:%M:%S", time.localtime()) > mail_time :
 if not match_row.empty :
-
+       
+       
        for  idx in [0,2,4] :
+
+            match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
 
             if idx in [2,4]:
 
                #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % round(x,3)   if x < 5  else f'<font color="red">+%s</font>' % round(x,3)  if x >=10 else  round(x,3))
                match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % round(x,3)   if x < 5  else f'<p style="background-color:Aqua;">%s</p>' % round(x,3)  if x >=10 else  f'<font color="red">+%s</font>' % round(x,3))
 
+
             elif idx == 0 :
 
-               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/dividend-policy/ex-dividend" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
-       
+               match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/dividend-policy/ex-dividend" target="_blank">%s</a>' %( x , x )  if pd.notnull(x)  else  x)
+      
+
+       match_row = pd_table.add_columns_into_row(match_row,20) 
        body = match_row.to_html(classes='table table-striped',escape=False)
        send_mail.send_email('Stock_Dividind_Coming_{today}'.format(today=mail_date),body)
+
+
+       #print(body)

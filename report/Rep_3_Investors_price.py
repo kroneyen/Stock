@@ -18,11 +18,14 @@ from matplotlib.font_manager import fontManager
 from fake_useragent import UserAgent
 import del_png
 import random
-
-
+import pandas_table as pd_table
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -72,8 +75,8 @@ def Check_sys_date(i_date_sii , i_date_otc) :
 #date_sii = datetime.date.today().strftime('%Y%m%d')
 #date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
 
-#date_sii='20240304'
-#date_otc='113/03/04'
+#date_sii='20250116'
+#date_otc='114/01/16'
 
 match_row = pd.DataFrame()
 
@@ -138,7 +141,7 @@ conn = MongoClient(mongourl)
 def insert_mongo_db(_db,_collection,_values):
     db = c[_db] ## database
     collection = db[_collection] ## collection 
-    collection.insert(_values)
+    collection.insert_one(_values)
 
 
 
@@ -209,22 +212,22 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
   
   for url in url_list :
 
-     r = requests.get(url , headers={ 'user-agent': user_agent.random }) 
+     #r = requests.get(url , headers={ 'user-agent': user_agent.random }) 
+     r = requests.get(url , headers={ 'user-agent': user_agent.random },verify=False) 
      r.encoding = 'utf8'
      #df = pd.read_html(r.text,thousands=",",timeout=1)[0]
      #r = requests.get(url)                             
      #r.encoding = 'utf8'                                         
      if r.status_code == 200 :                                   
-       
        ### try to solve No tables found
        try :                                                     
-          #df = pd.read_html(io.StringIO(r.text),thousands=",")[0]
-          df = pd.read_html(r.text,thousands=",")[0]
+          df = pd.read_html(StringIO(r.text),thousands=",")[0]
+          #df = pd.read_html(r.text,thousands=",")[0]
        except :                                                  
                                                                  
           time.sleep(random.randrange(30, 60, 10))                  
-          #df = pd.read_html(io.StringIO(r.text),thousands=",")[0]
-          df = pd.read_html(r.text,thousands=",")[0]
+          df = pd.read_html(StringIO(r.text),thousands=",")[0]
+          #df = pd.read_html(r.text,thousands=",")[0]
 
      df_len = len(df.columns)
      df.columns= llist(len(df.columns)) ##編列columns
@@ -273,8 +276,8 @@ def Rep_price(date_sii,date_otc,com_lists):
        url_sii = 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=' + date_sii + '&type=ALL'
        #https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=20210910&type=ALL
        
-       url_otc = 'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=' + date_otc +'&o=htm&s=0,asc,0'
-       #https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=110/09/10&o=htm&s=0,asc,0
+       #url_otc = 'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=' + date_otc +'&o=htm&s=0,asc,0'
+       url_otc = 'https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date='+ date_otc +'&type=EW&id=&response=html&order=0&sort=asc'
        
        url_list = [url_sii,url_otc]
        
@@ -284,12 +287,12 @@ def Rep_price(date_sii,date_otc,com_lists):
        dfs = pd.DataFrame()
        for url in url_list :
               
-              r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
+              r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
               r.encoding = 'utf8'
               if u_index == 0 :
-                df = pd.read_html(r.text,thousands=",")[8] ## []list to pandas
+                df = pd.read_html(StringIO(r.text),thousands=",")[8] ## []list to pandas
               else : 
-                df = pd.read_html(r.text,thousands=",")[0] ## []list to pandas
+                df = pd.read_html(StringIO(r.text),thousands=",")[0] ## []list to pandas
               
               df_len = len(df.columns)
               df.columns= llist(len(df.columns)) ##編列columns
@@ -360,11 +363,16 @@ date_otc = None
 date_sii,date_otc  = Check_sys_date(None,None)
 
 df_Rep_3_Investors = Rep_3_Investors(date_sii,date_otc,com_lists)
+
+#print(df_Rep_3_Investors.info())
+
+
 df_Rep_price = Rep_price(date_sii,date_otc,com_lists)
 
 
 df_s = pd.merge(df_Rep_3_Investors,df_Rep_price, on =['公司代號']) ##dataframe join by columns
-df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
+#df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
+df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').str.replace('除權','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
 df_s = df_s.iloc[:,[0,1,2,3,4,5,7,8]]
 match_row = df_s.sort_values(by=['漲跌(+/-)'],ascending=False,ignore_index= True).copy()
 
@@ -385,6 +393,7 @@ local_redis = get_redis_data('com_list','lrange',0,-1)
      
 if com_lists != local_mongo : 
    drop_mongo_db('stock','com_list')
+
    for com in com_lists :
      _values = { 'code' : com ,'last_modify': datetime.datetime.now() }
      insert_mongo_db('stock','com_list',_values)    
@@ -427,7 +436,6 @@ if chk == False :
    insert_many_mongo_db('stock','Rep_3_Investors',records)
 
 time.sleep(1)
-
 
 ### sync local mongo & redis data of com_list
 
@@ -564,7 +572,7 @@ def plot_Rep_3_Investors_price(match_row) :
    ### match_row  code con_days
    cal_day = match_row.iloc[:,[1]].astype('int64').abs().max() ###max con_days
 
-   last_modify = get_mongo_last_date(int(cal_day))
+   last_modify = get_mongo_last_date(int(cal_day.iloc[0]))
    ### dataframe to list 
    com_lists = match_row.iloc[:,[0]].reset_index(drop=True).squeeze()
    
@@ -608,7 +616,6 @@ def plot_Rep_3_Investors_price(match_row) :
 
 
 
-
 ### change column name for merge
 match_row.rename(columns={'公司代號':'code','合計':'total'}, inplace=True)
 
@@ -638,22 +645,29 @@ match_row['con_days'] = match_row['con_days'].astype('int64')
 
 
 for  idx in range(0,11,1) :
+
+    match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
+
     
-    #if idx ==9 :	
-    if idx in [5,7,8,9,10]:
+    if idx in [5,7,8,10]:
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x  if x >0  else f'<font color="red">%s</font>' % x if x < 0 else 0 )
+
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x if x >=5  else f'<font color="red">%dday</font>' % x if x < 0 else 0 )
     elif idx == 0 :
 
-         #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
-       
+
+    elif idx == 9 :
+         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Tomato;">+%s</p>' % (str(x)) if float(str(x)) >= 10 else  f'<font color="red">+%s</font>' % (str(x))  if float(str(x)) >=5   else  str(x) if float(str(x)) > 0  else   f'<p style="background-color:Lime;">%s</p>'  % (str(x)) if  float(str(x)) < -10  else   f'<p style="background-color:Aqua;">%s</p>' % (str(x))  if  float(str(x)) <-5   else  str(x) )
+
+    #elif idx == 10 :
+    #     match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x)  if x <0  else f'<font color="red">+%s</font>' % str(x) if x > 5 else   f'<font color="red">s</font>' % str(x)  if x > 0 else 0)
+
     elif idx not in [1,6]:
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x if x < 0 else str(x))
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
-
-
+         #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x)  if x <0  else f'<font color="red">+%s</font>' % str(x) if x > 5 else   f'<font color="red">s</font>' % str(x)  if x > 0 else 0)
 
 
 ####match_row=Rep_3_Investors(url_list)
@@ -662,14 +676,12 @@ for  idx in range(0,11,1) :
 if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and chk == False :
 
     if not match_row.empty :
+
+       match_row = pd_table.add_columns_into_row(match_row ,20)
        body = match_row.to_html(escape=False)
-       #body_color = body.replace('<td><font color="green">+5</font></td>','<td style="background-color:yellow;"><font color="green">+5</font></td>').replace('<td><font color="green">+10</font></td>','<td style="background-color:yellow;"><font color="green">+10</font></td>').replace('<td><font color="red">-5day</font></td>','<td style="background-color:#D3D3D3;"><font color="red">-5</font></td>').replace('<td><font color="red">-10day</font></td>','<td style="background-color:#D3D3D3;"><font color="red">-10</font></td>')
-       #send_mail.send_email('Rep_3_Investors_%s' % date_sii ,body_color)
        send_mail.send_email('Rep_3_Investors_%s' % date_sii ,body)
 
 else :
     print('Rep_3_Investors_%s' % date_sii )
-    #print(match_row)
     print(match_row.to_html(escape=False))
     #display(match_row)
-

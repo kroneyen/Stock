@@ -15,25 +15,29 @@ import seaborn as sns
 from matplotlib.font_manager import fontManager
 from fake_useragent import UserAgent
 import del_png
-
+import pandas_table as pd_table
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 
 
 # 改style要在改font之前
-plt.style.use('seaborn')  
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
 
 
-date_sii = datetime.date.today().strftime('%Y%m%d')
-date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
+#date_sii = datetime.date.today().strftime('%Y%m%d')
+#date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
 
 
 #date_sii = datetime.date.today().strftime('%Y%m%d')
-#date_sii= '20250219'
-#date_otc= '114/02/19'
+#date_sii= '20250624'
+#date_otc= '114/06/24'
 
 mail_time = '09:00:00'
 #mail_time = '18:00:00'
@@ -371,9 +375,9 @@ def Rep_Stock_Exchange_v1(date_sii,date_otc,com_lists) :
   
   for url in url_list :
 
-     r = requests.get(url , headers={ 'user-agent': user_agent.random })
+     r = requests.get(url , headers={ 'user-agent': user_agent.random },verify=False)
      r.encoding = 'utf8'
-     df = pd.read_html(r.text,thousands=",")[0]
+     df = pd.read_html(StringIO(r.text),thousands=",")[0]
 
      df_len = len(df.columns)
      df.columns= llist(len(df.columns)) ##編列columns
@@ -512,7 +516,7 @@ def plot_Rep_Stock_Exchange(match_row) :
    #cal_day = match_row.iloc[0,1]   ###max con_days
    
    
-   last_modify = get_mongo_last_date(int(cal_day))
+   last_modify = get_mongo_last_date(int(cal_day.iloc[0]))
 
    ### dataframe to list 
    com_lists = match_row.iloc[:,[0]].reset_index(drop=True).squeeze()
@@ -582,11 +586,56 @@ def Bias_Rate(cal):
     return df ,col_name
 
 
+def Check_sys_date(i_date_sii , i_date_otc) :
+    import sys
+
+    o_date_sii = None
+    o_date_otc = None
+    try :
+          i_date_sii = sys.argv[1]
+          i_date_otc = sys.argv[2]
+
+    except :
+           print('please execute python with sys_argv')
+           sys.exit(1)
+
+
+    if i_date_sii == '0' :
+
+          o_date_sii = datetime.date.today().strftime('%Y%m%d')
+
+    else :
+
+           o_date_sii = i_date_sii
+
+    if i_date_otc  == '0' :
+
+           o_date_otc = str(int(datetime.date.today().strftime('%Y')) - 1911)  +  datetime.date.today().strftime('/%m/%d')
+
+    else :
+
+           o_date_otc = i_date_otc
+
+    return o_date_sii , o_date_otc
+
+
+
+
+
+
 ### del images/*.png
 del_png.del_images()
 
 
 #### call function
+
+date_sii = None
+
+date_otc = None
+
+date_sii , date_otc = Check_sys_date(None,None)
+
+
 
 df_Rep_Stock_Exchange = pd.DataFrame()
 df_cal_con_days = pd.DataFrame()
@@ -664,15 +713,18 @@ match_row['continue_selling_short_balance_total']= round(round(match_row['total_
 
 ###20250220 add Bias_Rate using 10 day SMA 
 
-df_bias , col_bias = Bias_Rate(10)
-match_row = pd.merge(match_row,df_bias,how='left',on =['code'])
+df_bias_10 , col_bias_10 = Bias_Rate(10)
+df_bias_22 , col_bias_22 = Bias_Rate(22)
+match_row = pd.merge(match_row,df_bias_10,how='left',on =['code'])
+match_row = pd.merge(match_row,df_bias_22,how='left',on =['code'])
 #match_row['Bias'] = match_row.apply(lambda x : round(round((x['price'] - float(str(x['avg_price']))) / float(str(x['avg_price'])) ,4 ) * 100 , 2) if float(str(x['avg_price'])) > 0 else x['avg_price'] ,axis=1 )
 
 
 #print('match_row_661:',match_row.info())
 ##get column
-match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5,15]] 
-match_row.columns =['代號','名稱','借券','還券','借券差','借券差餘額','借券賣出','借券賣出還券','借券賣出餘額差','借券賣出餘額','con_days','total_values','連續天總額%(+)','收盤價',col_bias]
+#match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5,15]] 
+match_row = match_row.iloc[:,[0,1,2,3,10,4,6,7,11,9,13,12,14,5,15,16]] 
+match_row.columns =['代號','名稱','借券','還券','借券差','借券差餘額','借券賣出','借券賣出還券','借券賣出餘額差','借券賣出餘額','con_days','total_values','連續天總額%(+)','收盤價',col_bias_10,col_bias_22]
 match_row = match_row.sort_values(by=['連續天總額%(+)'],ascending = False ,ignore_index = True)
 
 
@@ -685,17 +737,27 @@ plot_Rep_Stock_Exchange(match_row.iloc[:,[0,10]])
 match_row['con_days'] = match_row['con_days'].astype('int64')
 
 ### adding nenagive vlues to red
-for  idx in [0,4,8,10,11,12,14] :
+for  idx in [0,4,8,10,11,12,14,15] :
+
+    match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
+
 
     if idx == 0 :
 
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/ShowMarginChart.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
     
+    elif idx == 10 :    ##con_days
+
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Tomato;">+%s</p>' % (x ) if x >= 10 else f'<font color="red">+%s</font>' % (x ) if x > 0 else  f'<p style="background-color:Lime;">%s</p>'  % (x) if x < -10 else  f'<font color="green">%s</font>' % (x ) )
+
+
     elif idx == 12 :    
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s%s</font>' % (x ,' %') if x > 0 else  f'<font color="green">%s%s</font>' % (x,' %' ) )
 
-    elif idx == 14 :
-       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s%s</font>' % (str(x) ,' %') if float(str(x)) > 10 else  f'<font color="green">%s%s</font>' % (str(x),' %')  if float(str(x)) < -10  else  str(x)+' %'  )
+    elif idx >= 14 : ## 14 Bias_10 / 15 Bias_22
+       #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s%s</font>' % (str(x) ,' %') if float(str(x)) > 10 else  f'<font color="green">%s%s</font>' % (str(x),' %')  if float(str(x)) < -10  else  str(x)+' %'  )
+       #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s%s</font>' % (str(x) ,' %') if float(str(x)) > 10 else  f'<font color="blue">%s%s</font>' % (str(x),' %')  if float(str(x)) >=5   else  f'<font color="green">%s%s</font>' % (str(x),' %') if  float(str(x)) < -10  else   f'<font color="brown">%s%s</font>' % (str(x),' %')  if  float(str(x)) <-5   else str(x)+' %'  )
+       match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Tomato;">+%s%s</p>' % (str(x) ,' %') if float(str(x)) > 10 else  f'<font color="red">+%s%s</font>' % (str(x),' %')  if float(str(x)) >=5   else  str(x)+' %' if float(str(x)) > 0  else   f'<p style="background-color:Lime;">%s%s</p>'  % (str(x),' %') if  float(str(x)) < -10  else   f'<p style="background-color:Aqua;">%s%s</p>' % (str(x),' %')  if  float(str(x)) <-5   else  str(x)+' %'  )
   
     else : 
        match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % (x ) if x > 0 else  f'<font color="green">%s</font>' % (x ) )
@@ -706,9 +768,11 @@ for  idx in [0,4,8,10,11,12,14] :
 if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and chk == False :
 
     if not match_row.empty :
+
+       match_row = pd_table.add_columns_into_row(match_row ,20)
        body = match_row.to_html(escape=False)
        send_mail.send_email('Rep_Stock_Exchange_%s' % date_sii ,body)
 
 else :
     print('Rep_Stock_Exchange_%s' % date_sii )
-    print(match_row.to_html(escape=False))
+    #print(match_row.to_html(escape=False))

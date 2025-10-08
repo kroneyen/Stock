@@ -15,10 +15,16 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.font_manager import fontManager
+import pandas_table as pd_table
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 
 # 改style要在改font之前
-plt.style.use('seaborn')
+plt.style.use("seaborn-v0_8")
 fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
@@ -161,13 +167,13 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     #u_index = 0
     for url in url_list : 
        dfs=pd.DataFrame()
-       r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
+       r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False)
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
        for i in range(1,len(tables)+1) :
 
-         df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+         df = pd.read_html(StringIO(r.text),thousands=",")[i] ## 多表格取的[i]為dataframe
 
          df.columns= llist(len(df.columns)) ##重新編列columns
          last_col_num = len(df.columns)-1  ## get last columns num (基本每股盈餘（元）) 17 or 21 or 29
@@ -206,12 +212,12 @@ def Rep_price(date_sii,date_otc,com_lists):
        u_index = 0
        dfs = pd.DataFrame()
        for url in url_list :
-              r = requests.get(url ,  headers={ 'user-agent': user_agent.random })
+              r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
               r.encoding = 'utf8'
               if u_index == 0 :
-                df = pd.read_html(r.text,thousands=",")[8] ## []list to pandas
+                df = pd.read_html(StringIO(r.text),thousands=",")[8] ## []list to pandas
               else :
-                df = pd.read_html(r.text,thousands=",")[0] ## []list to pandas
+                df = pd.read_html(StringIO(r.text),thousands=",")[0] ## []list to pandas
 
               df_len = len(df.columns)
               df.columns= llist(len(df.columns)) ##編列columns
@@ -289,7 +295,7 @@ def stock_season_roa_roe(year, season, com_lists):
        ##print('payload:',payload)
        dfs = pd.DataFrame()
        #r =  requests.post(url ,params=payload ,  headers=headers)
-       r =  requests.post(url ,params=payload ,  headers={ 'user-agent': user_agent.random })
+       r =  requests.post(url ,params=payload ,  headers={ 'user-agent': user_agent.random },verify=False)
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -299,7 +305,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
         for i in range(1,len(tables)+1) :
 
-          df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+          df = pd.read_html(StringIO(r.text),thousands=",")[i] ## 多表格取的[i]為dataframe
 
           df_list = df.columns
           last_col_num=len(df_list) -1
@@ -355,7 +361,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
         for i in range(1,len(tables)+1) :
 
-          df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+          df = pd.read_html(StringIO(r.text),thousands=",")[i] ## 多表格取的[i]為dataframe
 
 
           df_list = df.columns
@@ -528,7 +534,7 @@ def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
      dfs_Investors = pd.DataFrame()
      df_cal_day_conti = cal_con_days('stock','Rep_3_Investors')  ## code     total_values    con_days
      cal_day = df_cal_day_conti.iloc[:,[2]].astype('int64').abs().max()
-     last_modify = get_mongo_last_date(int(cal_day[0]))
+     last_modify = get_mongo_last_date(int(cal_day.iloc[0]))
      dfs_merge = pd.DataFrame()
 
      for idx in com_list :
@@ -742,7 +748,7 @@ except :
    redis_lists = get_redis_data("com_lists","hkeys",'NULL','NULL') ## get  redis data
    for  idx in redis_lists :
          #if not re.match("(\w+_p$)", idx) :
-         if  re.match("(\w+:code$)", idx) :
+         if  re.match(r"(\w+:code$)", idx) :
              com_lists.append(idx)
 
 
@@ -948,7 +954,7 @@ match_row_doc['PE']= round(round(match_row_doc['price']/match_row_doc.iloc[:,2],
 
 
 
-## PE & yield filter
+## PE & yield filter  [(match_row_doc['PE']<35) & (match_row_doc['yield_60%']>0)
 
 
 for idx_com in [com_list, com_lists] :
@@ -958,14 +964,21 @@ for idx_com in [com_list, com_lists] :
     if len(idx_com) == len(com_list) :
 
          match_row = match_row_doc[match_row_doc["code"].isin(com_list)]
-         plot_Stock_Eps_Yield_PE_Season(season,yy,com_list)
+
+         if not match_row.empty :
+            plot_Stock_Eps_Yield_PE_Season(season,yy,com_list)
 
     	 
     else : 	
 
          ### del images/*.png
          del_png.del_images() 
- 
+
+         match_row = match_row_doc.copy()
+
+
+         ### Disable Filter Show
+         """ 
          if datetime.datetime.today().isoweekday() == 5 :  ## show all company on friday
        
              match_row = match_row_doc.copy()
@@ -981,7 +994,7 @@ for idx_com in [com_list, com_lists] :
                   match_row = match_row_doc.copy()
              else  :
                   match_row = match_row_filter.copy()    	 
-          
+         """  
     ## columns order for mail                                                                                                                                                                                                        
     """                                                                                                                                                                                                                           
     the_sst = "累計盈餘{}_Q{}".format(yy,season)                                                                                                                                                                                      
@@ -1067,9 +1080,12 @@ for idx_com in [com_list, com_lists] :
        range_s = 0                                                                                                                                                                                                                
        range_d= len(match_row.columns) -1 ### remove avg/ cheap_check/ seasonable_check                                                                                                                                                                                                              
                                                                                                                                                                                                                              
-       check_sort_column=['cheap_check','seasonable_check','PE','yield%','avg','cash_div']                                                                                                                                                
-       check_assc = [False,False,assc ,False,False,False]                                                                                                                                                                                      
-       rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓','yield%' : 'yield%↓','PE': 'PE↑','cash_div' : 'cash_div↓' , 'avg':'5avg_yield'}                                                                                                         
+       #check_sort_column=['cheap_check','seasonable_check','PE','yield%','avg','cash_div']                                                                                                                                                
+       check_sort_column=['cheap_check','seasonable_check','div_date_check','div_stock_date_check','PE','yield%','avg','cash_div']                                                                                                                                                
+       #check_assc = [False,False,assc ,False,False,False]                                                                                                                                                                                      
+       check_assc = [False,False,False,False,assc ,False,False,False]                                                                                                                                                                                      
+       #rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓','yield%' : 'yield%↓','PE': 'PE↑','cash_div' : 'cash_div↓' , 'avg':'5avg_yield'}                                                                                                         
+       rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓','yield%' : 'yield%↓','PE': 'PE↑','cash_div' : 'cash_div↓' , 'avg':'5avg_yield','div_date':'div_date↓','div_stock_date':'div_stock_date↓'}                                                                                                         
                                                                                                                                                                                                                              
                                                                                                                                                                                                                              
     else :                                                                                                                                                                                                                        
@@ -1089,20 +1105,38 @@ for idx_com in [com_list, com_lists] :
         match_row[idx] = match_row[idx].astype(float)                                                                                                                                                                          
     """
     match_row['PE'] = match_row['PE'].astype(float)                                                                                                                                                                                                 
+    ### insert to mongodb Stock_Eps_Yield_PE_Daily
+    """
+    records = match_row.iloc[:,[0,4,5,6,7,8,9,14,15,16]].copy()
+    records.columns =['code','EPS_g%','price','yield%','PE','RoE','RoA','cheap','seasonable','expensive']
+    records =records.to_dict(orient='records')
+    ## coding  bec not include ROE ROA
+    delete_many_mongo_db('stock','Stock_Eps_Yield_PE_Daily',{})
+    insert_many_mongo_db('stock','Stock_Eps_Yield_PE_Daily',records)
+    """
+
     #print('1088_match_row_info:',match_row.info())                         
     compare_data_p_stype = pd.DataFrame() 	
     ### for mail HTML
     for idx in list(range(range_s,range_d)) :
+
+        match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
+
         ## code
-        if idx == 0 :
-           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+        #if idx == 0 :
+        #   match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
     
-        elif idx == 4 :
+        if idx == 4 :
            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
         ## 'yield_60%' , 'yield%'
         elif idx == 6 :
     
            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % x  if x >6  else  f'<font color="green">%s</font>' % x  if pd.isnull(x) else str(x))
+        ### ROE >=15
+        elif idx == 8 :
+
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:#FF95CA;">%s</p>' % x  if x >=15  else  str(x))
+
     
         #elif idx >= 11 and today.month >=3 :
         #elif idx >= 11 and idx <=13 and today.month >=3 :
@@ -1161,10 +1195,18 @@ for idx_com in [com_list, com_lists] :
     
                 ## div_date /div_stock_date / 5_avg_yield           
                 match_row.iloc[:,11] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[3]]  if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[3]],axis=1)
+
+                ## match_row.iloc[:17]
+                #match_row['div_date_check'] =  compare_data.apply(lambda  x: 0   if    pd.isnull(x[compare_name[3]])  or (pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()  )    else 1    ,axis=1 )
+                match_row['div_date_check'] =  compare_data.apply(lambda  x: 0   if    pd.isnull(x[compare_name[3]])  else 1   if pd.notnull(x[compare_name[3]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[3]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else 2    ,axis=1 )
+
     
                 match_row.iloc[:,13] =  compare_data.apply(lambda  x: f'<del style="color:#aaa;">%s</del>' % x[compare_name[4]]  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()   else x[compare_name[4]],axis=1)
 
-    
+                ## match_row.iloc[:18] 
+                #match_row['div_stock_date_check'] =  compare_data.apply(lambda  x: 0  if  pd.isnull(x[compare_name[4]]) or (pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now() )   else 1 ,axis=1)
+                match_row['div_stock_date_check'] =  compare_data.apply(lambda  x: 0  if  pd.isnull(x[compare_name[4]]) else  1  if pd.notnull(x[compare_name[4]])  and datetime.datetime.strptime(str(datetime.date.today().year) + '/' +x[compare_name[4]] ,  "%Y/%m/%d") <= datetime.datetime.now()    else 2 ,axis=1)
+
         else :
     
              if idx > 1 and idx < 17 and idx != 7:
@@ -1179,18 +1221,34 @@ for idx_com in [com_list, com_lists] :
    
     ### sort columns 
     match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
-
-    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))  ### PE by sort 
+    ### PE by sort
+    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))  
     
     match_row=match_row.iloc[:,range_s:range_d].copy() ### remove 5avg_yield
     
     match_row =  match_row.rename(columns=rename_col)  
+
+
+    ### insert to mongodb Stock_Eps_Yield_PE_Daily
+    #print(match_row.info())
+     
+    if len(idx_com) == len(com_lists) :
+       records = match_row.iloc[:,[0,5,6,7,8,9,14,15,16]].copy()
+       records.columns =['code','price','yield%','PE','RoE','RoA','cheap','seasonable','expensive']
+       records =records.to_dict(orient='records')
+       ## coding  bec not include ROE ROA
+       delete_many_mongo_db('stock','Stock_Eps_Yield_PE_Daily',{})
+       insert_many_mongo_db('stock','Stock_Eps_Yield_PE_Daily',records)
+
+    ### change column name link 
+    match_row.iloc[:,0] = match_row.iloc[:,0].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
 
  
     if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
         #match_row.to_html('hot_news_link.log')
         if not match_row.empty :
 
+           match_row = pd_table.add_columns_into_row(match_row ,20)
            body = match_row.to_html(classes='table table-striped',escape=False)
            send_mail.send_email('Stock_Eps_Yield_PE_{today}_com'.format(today=date_sii),body)
     else :
