@@ -130,15 +130,18 @@ def data_insert_mongo(_db, _collection, _dicct):
   
    ### get local mongo  data
    local_data = read_mongo_db(_db,_collection,_dicct,_columns)
+   _values = list(local_data)
 
-   if local_data.count() > 0 : 
+   if len(_values) > 0 : ### pymongo 4.15.2  change 
 
      d_dicct = {}
-     
+
+
      ## delete old atlas mongo data  
      atlas_delete_many_mongo_db(_db,_collection,d_dicct)     
 
-     atlas_insert_many_mongo_db(_db,_collection,local_data)
+
+     atlas_insert_many_mongo_db(_db,_collection,_values)
       
 
 def create_view(v_db,v_collection,v_view,v_pipe) :
