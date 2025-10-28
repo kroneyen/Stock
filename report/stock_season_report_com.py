@@ -12,7 +12,6 @@ from pymongo import MongoClient
 from fake_useragent import UserAgent
 import del_png
 import re
-from io import StringIO
 from pymongo import MongoClient
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -137,7 +136,7 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 
        for i in range(1,len(tables)+1) : 
 
-         df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+         df = pd.read_html(StringIO(r.text),thousands=",")[i] ## 多表格取的[i]為dataframe
 
          df.columns= llist(len(df.columns)) ##重新編列columns
          last_col_num = len(df.columns)-1  ## get last columns num (基本每股盈餘（元）) 17 or 21 or 29
@@ -221,7 +220,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
         for i in range(1,len(tables)+1) :
 
-          df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+          df = pd.read_html(StringIO(r.text),thousands=",")[i] ## 多表格取的[i]為dataframe
           
           
           df_list = df.columns
@@ -280,7 +279,7 @@ def stock_season_roa_roe(year, season, com_lists):
         
         for i in range(1,len(tables)+1) :
 
-          df = pd.read_html(r.text,thousands=",")[i] ## 多表格取的[i]為dataframe
+          df = pd.read_html(StringIO(r.text),thousands=",")[i] ## 多表格取的[i]為dataframe
    
 
           df_list = df.columns
@@ -505,7 +504,7 @@ except :
    redis_lists = get_redis_data("com_lists","hkeys",'NULL','NULL') ## get  redis data
    for  idx in redis_lists : 
         #if not re.match("(\w+_p$)", idx) : 
-        if  re.match("(\w+:code$)", idx) :
+        if  re.match(r"(\w+:code$)", idx) :
            com_lists.append(idx) 
 
    com_list = get_redis_data("com_list","lrange",0,-1) ## get  redis data
@@ -682,6 +681,7 @@ for idx_com in [com_list, com_lists] :
             match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
             match_row = pd_table.add_columns_into_row(match_row ,20) 
             body = match_row.to_html(classes='table table-striped',escape=False)
-            send_mail.send_email('{year}_Stock_Q{season}_Report' .format(year = s_year ,season=s_season) ,body)
+            m_today = datetime.date.today().strftime("%Y%m%d")
+            send_mail.send_email('{year}_Stock_Q{season}_Report_{today}' .format(year = s_year ,season=s_season,today=m_today ) ,body)
         else :
            print(match_row.to_html(escape=False))
