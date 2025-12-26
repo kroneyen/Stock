@@ -40,6 +40,8 @@ options.add_argument("--headless")
 options.add_argument('--disable-dev-shm-usage')
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-gpu")
+options.add_argument("--disable-site-isolation-trials")
+options.add_argument("--renderer-process-limit=4")
 file_path = os.getcwd() + '/Dividend_file'
 #prefs = {"download.default_directory":"./KD_file" ,"savefile.default_directory" : "./KD_file","download.directory_upgrade": True,} ###selenium 4.X
 prefs = {"download.default_directory":file_path ,"savefile.default_directory" : file_path,"download.directory_upgrade": True,} ###selenium 4.X
