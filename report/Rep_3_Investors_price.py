@@ -21,6 +21,9 @@ import random
 import pandas_table as pd_table
 from io import StringIO
 import urllib3
+import re
+
+
 ### disable  certificate verification
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -342,6 +345,13 @@ try :
   for idx in mydoc :
     com_lists.append(idx.get('code'))
 
+  ### adding ETF 
+  mydoc_ETF = atlas_read_mongo_db('stock','ETF_code',dictt,_columns)
+
+  for idx in mydoc_ETF :
+    com_lists.append(idx.get('code'))
+
+
 except :
    ### got redis data from local
    com_lists = get_redis_data("com_list","lrange",0,-1) ## get  redis data
@@ -638,13 +648,20 @@ match_row = match_row.iloc[:,[0,1,2,3,4,5,6,7,11,10,12]].fillna(0)
 ### plot Rep_3_Investors_price for line 
 ## code , con_days%
 #print('match_row_0_9:' ,match_row.iloc[:,[0,9]])
+
+### for sort by ETF
+
+match_row['ETF_tag'] = match_row['code'].apply(lambda  x: 1  if  re.search(r"^00", str(x))  else  0)
+match_row = match_row.sort_values(by=['ETF_tag','con_days%'],ascending=[True,False],ignore_index= True)
+match_row = match_row.drop(['ETF_tag'],axis = 'columns')
+
 plot_Rep_3_Investors_price(match_row.iloc[:,[0,9]])
+
 
 
 match_row['con_days'] = match_row['con_days'].astype('int64')
 
-
-for  idx in range(0,11,1) :
+for  idx in range(1,11,1) :
 
     match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
 
@@ -656,7 +673,8 @@ for  idx in range(0,11,1) :
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">+%s</font>' % x if x >=5  else f'<font color="red">%dday</font>' % x if x < 0 else 0 )
     elif idx == 0 :
 
-         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+         #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+         match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if pd.notnull(x)  else  x)
 
     elif idx == 9 :
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Tomato;">+%s</p>' % (str(x)) if float(str(x)) >= 10 else  f'<font color="red">+%s</font>' % (str(x))  if float(str(x)) >=5   else  str(x) if float(str(x)) > 0  else   f'<p style="background-color:Lime;">%s</p>'  % (str(x)) if  float(str(x)) < -10  else   f'<p style="background-color:Aqua;">%s</p>' % (str(x))  if  float(str(x)) <-5   else  str(x) )
@@ -669,6 +687,18 @@ for  idx in range(0,11,1) :
          match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
          #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % str(x)  if x <0  else f'<font color="red">+%s</font>' % str(x) if x > 5 else   f'<font color="red">s</font>' % str(x)  if x > 0 else 0)
 
+
+### for sort by ETF 
+"""
+idx =0 
+
+match_row['ETF_tag'] = match_row.iloc[:,idx].apply(lambda  x: 1  if  re.search(r"^00", str(x))  else  0) 
+match_row = match_row.sort_values(by=['ETF_tag','con_days%'],ascending=[True,False],ignore_index= True)
+match_row = match_row.drop(['ETF_tag'],axis = 'columns')
+match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if pd.notnull(x)  else  x)
+print(match_row.info())
+#match_row['code'] = match_row['code'].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/institutional-investors/trend" target="_blank">%s</a>' %( x , x )  if pd.notnull(x)  else  x)
+"""
 
 ####match_row=Rep_3_Investors(url_list)
 
