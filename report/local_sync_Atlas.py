@@ -4,7 +4,6 @@ import pandas as pd
 import datetime
 import redis
 import time
-import requests
 from pymongo import MongoClient
 import json
 import Atlas_mongodb_insert
@@ -119,7 +118,6 @@ for _collection in _collection_list :
     
     if re.search("^Rep",_collection) : 
 
-
        Atlas_mongodb_insert.data_insert_mongo(_db, _collection, _dicct)
 
 
@@ -138,7 +136,7 @@ for _collection in _collection_list :
 
 _db_list = ['bankrate']
 
-_collection_list = ['target_currency','daily_currency']
+_collection_list = ['target_currency','daily_currency','daily_currency_low']
 
 _dicct={"last_modify" : {"$gte":  _iso_date }}
 
