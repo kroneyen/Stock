@@ -765,9 +765,7 @@ for  idx in [0,4,8,10,11,12,14,15] :
 
 
 ###send mail
-if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and chk == False :
-
-    if not match_row.empty :
+if (time.strftime("%H:%M:%S", time.localtime()) > mail_time) and (chk == False)  and (not match_row.empty):
 
        match_row = pd_table.add_columns_into_row(match_row ,20)
        body = match_row.to_html(escape=False)
