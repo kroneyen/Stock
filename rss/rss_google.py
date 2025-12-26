@@ -83,33 +83,6 @@ def root_data(item):
   
    return ([title,link,pubDate,pubTime,source])
 
-"""
-def reurl_API(link_list):
-
-     reurl_link_list = []
-
-     reurl_api_key = "".join(get_redis_data("reurl_key",'lrange',0,-1))  ## list_to_str
-
-     s_reurl = 'https://api.reurl.cc/shorten'
-     s_header = {"Content-Type": "application/json" , "reurl-api-key": reurl_api_key}
-
-     for link in link_list :
-       s_data = {"url": link}
-       
-       r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
-
-       try :
-           rerul_link = r["short_url"]
-       except : 
-           rerul_link = link
-
-       reurl_link_list.append(rerul_link)
-
-
-       time.sleep(round(random.uniform(0.5, 1.0), 10))
-
-     return reurl_link_list
-"""
 
 
 def reurl_API(link_list,_key):
@@ -127,13 +100,46 @@ def reurl_API(link_list,_key):
         for link in link_list :
             s_data = {"url": link}
 
-
+            """
             r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
 
             try :
                 rerul_link = r["short_url"]
             except :
                 rerul_link = link
+
+            """
+            try : 
+                 r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
+                 rerul_link = r["short_url"]
+
+            except : 
+                 
+                   time.sleep(round(random.uniform(0.5, 1.0), 20))
+                   
+                   """
+                   reurl_api_key = "".join(get_redis_data('short_url_key','hget','reurl_hotmail_key','NULL'))  ## list_to_str
+                   s_header = {"Content-Type": "application/json" , "reurl-api-key": reurl_api_key}
+
+                   try : 
+                         
+                         r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
+                         rerul_link = r["short_url"]
+                   """
+
+                   reurl_api_key = "".join(get_redis_data('short_url_key','hget','ssur_key','NULL'))  ## list_to_str
+                   s_reurl = 'https://ssur.cc/api.php?'
+                   s_data = {"format": "json" , "appkey": reurl_api_key ,"longurl" : link}
+
+                   r = requests.post(s_reurl, data= s_data  ).json()
+
+                   try :
+                       rerul_link = r["ae_url"]
+
+
+                   except :
+                         rerul_link = link
+
 
             reurl_link_list.append(rerul_link)
 
@@ -169,13 +175,6 @@ def reurl_API(link_list,_key):
 
 
 
-def send_line_notify(token,msg):
-
-    requests.post(
-    url='https://notify-api.line.me/api/notify',
-    headers={"Authorization": "Bearer " + token},
-    data={'message': msg}
-    )
 
 
 
@@ -277,8 +276,8 @@ def rss_get(com_list_name,web_list,exclude_tag):
     
     for idx in exclude_tag :
 
-      p = re.compile(fr'\w{idx}*'  )
-      p1 = re.compile(fr'\b{idx}*')
+      p = re.compile(r'\w{idx}*'  )
+      p1 = re.compile(r'\b{idx}*')
 
       dfs_uni_titile['title_None'] = dfs_uni_titile.apply(lambda  x: None  if  p.findall(x['title'])  else None if p1.findall(x['title']) else 1   ,axis=1)
       dfs_uni_titile = dfs_uni_titile.dropna()     
@@ -396,18 +395,7 @@ try :
     #match_row = rss_get(com_list_name,web_list)
     ## choice column for line nofity 
     match_row = match_row.iloc[:,[3,0,5]] ## pub_Time/title/URL
-    """
     ### filter exclude with tag 世界 盤中速報
-    for idx in exclude_tag :
-       #idx = idxs.get('tag')
-       print('idx:',idx)      
-       p = re.compile(fr'\b{idx}*') ## 
-       p1 = re.compile(fr'\w{idx}*') ##unicode
-         
-       match_row['title_exclude_tag'] = match_row.apply(lambda  x: None  if  p.findall(x['title'])  else None if p1.findall(x['title']) else 1   ,axis=1)
-       match_row.dropna()
-    match_row = match_row.iloc[:,[0,1,2]]
-    """
 
 except : 
        #match_row =pd.DataFrame()  ### is empty()       
@@ -459,11 +447,8 @@ https://cn.wsj.com/zh-hant
 
 #if not match_row.empty and  time.strftime("%H:%M:%S", time.localtime()) < notify_time :
 if not match_row.empty  :
-          line_key_list =[]
           tg_key_list=[]
           tg_chat_id=[]
-          ##line_key_list.append(get_redis_data('line_key','lrange_head','2')) ## for rss_google
-          line_key_list.append(get_redis_data('line_key_hset','hget','rss_google','NULL')) ## for rss_google of signle
           tg_key_list.append(get_redis_data('tg_bot_hset','hget','@stock_broadcast_2024bot','NULL')) ## for rss_google of signle
           tg_chat_id.append(get_redis_data('tg_chat_id','hget','stock_broadcast','NULL')) ## for rss_google of signle
           
@@ -473,13 +458,6 @@ if not match_row.empty  :
               tg_msg ="【rss_google】  "+ "\n" + msg
 
               ### for multiple line group
-              ### line notify colse on '2025-03-31'
-              deadline_check = datetime.date.today().strftime("%Y-%m-%d")
-              if  deadline_check <= '2025-03-31' :
-
-                  for line_key in  line_key_list : ##
-                      send_line_notify(line_key, msg)
-                      time.sleep(random.randrange(1, 3, 1))
 
               for tg_key in  tg_key_list : ## 
                   send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)                  
