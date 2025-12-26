@@ -10,6 +10,11 @@ import redis
 from pymongo import MongoClient ,IndexModel
 import random
 from fake_useragent import UserAgent
+from io import StringIO
+import urllib3
+import re
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
@@ -59,7 +64,7 @@ def insert_many_mongo_db(_conn,_db,_collection,_values):
 
 
 
-def drop_mongo_db(_conn,_db,_collection):
+def drop_collection(_conn,_db,_collection):
     if _conn == 'c' :
       db = c[_db] ## database
     elif _conn == 'conn':
@@ -83,12 +88,27 @@ def createIndex_mongo_db(_conn,_db,_collection,_values):
 
 
 
-def read_mongo_db(_db,_collection,dicct,_columns):
-    db = c[_db] ## database
+def read_mongo_db(_conn,_db,_collection,dicct,_columns):
+    if _conn == 'c' :
+      db = c[_db] ## database
+    elif _conn == 'conn':
+      db = conn[_db] ## database  
+
     collection = db[_collection] ## collection 
     #return collection.find({_code:_qq},{"code":1,"name":0,"_id":0,"last_modify":0})
     #return collection.find(dicct,{"code": 1,"name": 1,"_id": 0})
     return collection.find(dicct,_columns)
+
+
+
+def get_colleciton_name(_conn,_db) :
+    if _conn == 'c' :
+      db = c[_db] ## database
+    elif _conn == 'conn':
+      db = conn[_db] ## database  
+
+    collection_names = db.list_collection_names()
+    return collection_names
 
 
 
@@ -153,6 +173,7 @@ def get_com_auth_stock() :
 
   #url = 'https://mops.twse.com.tw/mops/web/ajax_t51sb01'
   url = 'https://mopsov.twse.com.tw/mops/web/ajax_t51sb01'
+  url_ETF ='https://mopsov.twse.com.tw/mops/web/t51sb11_q2'
   dfs = pd.DataFrame()
   types =  ['sii','otc']
   for type in types :
@@ -164,20 +185,70 @@ def get_com_auth_stock() :
    
    user_agent = UserAgent()
 
-   r = requests.post(url, headers={ 'user-agent': user_agent.random },data=payload)
+   r = requests.post(url, headers={ 'user-agent': user_agent.random },data=payload,verify=False)
    r.encoding = 'utf8'
-   df = pd.read_html(r.text,thousands=',')[0]
+   df = pd.read_html(StringIO(r.text),thousands=',')[0]
    df = df.iloc[:,[0,2,17]]
    df['type'] = type
    df.columns= llist(len(df.columns))
    dfs = pd.concat([dfs,df] ,ignore_index = True)
-   
+  
+
   dfs.columns =['id','name','auth_stock','type']
   dfs.drop(dfs.loc[dfs['id']=='公司代號'].index, inplace=True)
+  ### 過濾auth_stock中文bug
+  dfs['auth_stock'] = pd.to_numeric(dfs['auth_stock'], errors='coerce')
+  dfs = dfs.dropna(subset=['auth_stock'])
   dfs = dfs.astype({'auth_stock':'int64'})
   dfs['auth_stock'] = round((dfs['auth_stock']/1000),0).astype(int) ## 
 
   return dfs
+
+
+
+
+def get_ETF_com_auth_stock() :
+
+  url = 'https://mopsov.twse.com.tw/mops/web/ajax_t51sb11'
+  dfs = pd.DataFrame()
+  types =  ['sii']
+  for type in types :
+   payload = { 'encodeURIComponent':1
+         ,'step':0
+         ,'firstin':1
+         ,'run': '' }  ## default is all
+
+
+   user_agent = UserAgent()
+
+   #eaders = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+
+   r = requests.post(url, headers={ 'user-agent': user_agent.random },data=payload,verify=False)
+   #r = requests.post(url, headers=headers,data=payload)
+   r.encoding = 'utf8'
+   df = pd.read_html(StringIO(r.text),thousands=',')[0]
+
+   
+   df = df.iloc[:,[0,1,23]]
+   df['type'] = type
+   df.columns= llist(len(df.columns))
+   dfs = pd.concat([dfs,df] ,ignore_index = True)
+
+
+  dfs.columns =['id','name','auth_stock','type']
+  dfs.drop(dfs.loc[dfs['id']=='公司代號'].index, inplace=True)
+  ### 過濾auth_stock中文bug
+  dfs['auth_stock'] = pd.to_numeric(dfs['auth_stock'], errors='coerce')
+  dfs = dfs.dropna(subset=['auth_stock'])
+  dfs = dfs.astype({'auth_stock':'int64'})
+  dfs['auth_stock'] = round((dfs['auth_stock']/1000),0).astype(int) ## 
+  
+  return dfs
+
+
+
+
+
 
 
 #com_lists= Get_Com_List_v1(2000)
@@ -197,6 +268,10 @@ for index in range(len(com_lists)) :
 #print(check_mongo())
 
 com_lists = get_com_auth_stock()
+ETF_com_lists = get_ETF_com_auth_stock()
+
+
+com_lists = pd.concat([com_lists,ETF_com_lists])
 
 ### insert to redis 
 
@@ -216,8 +291,9 @@ time.sleep(random.randrange(1, 3, 1))
 ### insert to local mongo & altas mongo 
 
 
-drop_mongo_db('c','stock','com_lists')
-drop_mongo_db('conn','stock','com_lists')
+drop_collection('c','stock','com_lists')
+#drop_collection('c','stock','com_list') ### atlas sync com_list to local
+drop_collection('conn','stock','com_lists')
 time.sleep(random.randrange(1, 3, 1))
 
 #auth_stock_count = 0 
@@ -227,14 +303,50 @@ for index in range(len(com_lists)) :
    _values = { 'code' : str(com_lists.iloc[index,0]) ,'name': str(com_lists.iloc[index,1]) , 'auth_stock' : str(com_lists.iloc[index,2]),'type' : str(com_lists.iloc[index,3]),'last_modify':datetime.now() }
    _values_lists.append(_values)
 
+
+
+### defind index 
+com_list_index= IndexModel([('code',1)],name='code_1' , unique=True ,background=True )
+com_lists_index= IndexModel([('code',1),('type',1)],name='code_type' , unique=True ,background=True )
+
+
+### get atlas com_list data 
+
+collection_list = get_colleciton_name('conn','stock')
+
+name_list = []
+dicct ={}
+_columns = {"_id" : 0}
+
+for c_name in  collection_list :
+
+  if re.search(r'com_list$',c_name) :
+     name_list.append(c_name)
+
+for  idx_name in name_list :
+
+    ### atlas sync com_list to local
+
+     _values = read_mongo_db('conn','stock',idx_name,dicct,_columns)
+
+     mydoc = pd.DataFrame(list(_values))
+
+     if  not mydoc.empty : 
+
+        #drop_collection('c','stock',idx_name) 
+        #insert_many_mongo_db('c','stock',idx_name,_values)
+        ### add index for com_list
+        createIndex_mongo_db('c','stock',idx_name,com_list_index)
+        createIndex_mongo_db('conn','stock',idx_name,com_list_index)
+
+
+
+
    
 ### insert data to local mongodb & altas mogodb    
 insert_many_mongo_db('c','stock','com_lists',_values_lists)
 insert_many_mongo_db('conn','stock','com_lists',_values_lists)
 
-
-com_list_index= IndexModel([('code',1)],name='code_1' , unique=True ,background=True )
-com_lists_index= IndexModel([('code',1),('type',1)],name='code_type' , unique=True ,background=True )
 
 ### add index for com_list
 createIndex_mongo_db('c','stock','com_list',com_list_index)
@@ -248,7 +360,7 @@ createIndex_mongo_db('conn','stock','com_lists',com_lists_index)
 dictt = {}
 _columns= {"code": 1,"name": 1,"auth_stock":1,"type":1,"_id": 0}
 
-mydoc = read_mongo_db('stock','com_lists',dictt,_columns)
+mydoc = read_mongo_db('c','stock','com_lists',dictt,_columns)
 
 for idx in mydoc :
   #print(idx.get('code'),idx.get('name'))
