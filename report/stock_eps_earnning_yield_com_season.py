@@ -28,11 +28,10 @@ fontManager.addfont('images/TaipeiSansTCBeta-Regular.ttf')
 mpl.rc('font', family='Taipei Sans TC Beta')
 
 
-
-
+start_time = time.perf_counter()
 
 ### del images/*.png
-del_png.del_images()
+#del_png.del_images()
 
 
 
@@ -527,52 +526,52 @@ def cal_con_days(_db,_collection):
 
 
 
-def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
+#def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
+def plot_Stock_Eps_Yield_PE_Season(season,year,plot_code):
+
+     ### del images/*.png
+     del_png.del_images()
 
      dfs = pd.DataFrame()
      dfs_Investors = pd.DataFrame()
-     df_cal_day_conti = cal_con_days('stock','Rep_3_Investors')  ## code     total_values    con_days
-     cal_day = df_cal_day_conti.iloc[:,[2]].astype('int64').abs().max()
-     last_modify = get_mongo_last_date(int(cal_day.iloc[0]))
+     #df_cal_day_conti = cal_con_days('stock','Rep_3_Investors')  ## code     total_values    con_days
+     #cal_day = df_cal_day_conti.iloc[:,[2]].astype('int64').abs().max()
+     #last_modify = get_mongo_last_date(int(cal_day.iloc[0]))
+     ## for 1 season 
+     last_modify = get_mongo_last_date(65)  
      dfs_merge = pd.DataFrame()
+     ### convert to list
+     com_list = plot_code['code'].tolist() 
 
-     for idx in com_list :
+     ### get  Season data
+     altas_mydoc_Season = read_mongo_db('stock','Rep_Stock_Season_Com',{'code': {"$in":com_list} ,'season': str(season) , "years" : str(year)  },{'_id':0})
+     ### get price
+     altas_mydoc_Investors = read_mongo_db('stock','Rep_3_Investors',{'code': {"$in":com_list} ,"last_modify" : {"$gte" : last_modify}},{'_id':0 ,'code':1 ,'price':1 , 'last_modify':1})
 
-         altas_mydoc_Season = read_mongo_db('stock','Rep_Stock_Season_Com',{'code': idx ,'season': str(season) , "years" : str(year)  },{'_id':0})
-         ### get price
-         altas_mydoc_Investors = read_mongo_db('stock','Rep_3_Investors',{'code': idx ,"last_modify" : {"$gte" : last_modify}},{'_id':0 ,'code':1 ,'price':1 , 'last_modify':1})
+     df = pd.DataFrame(list(altas_mydoc_Season))
+     df_Investors = pd.DataFrame(list(altas_mydoc_Investors))
+     ### Filter data
+     df = df.iloc[:,[0,1,2,5,6]].copy()
 
-
-         df = pd.DataFrame(list(altas_mydoc_Season))
-
-         df_Investors = pd.DataFrame(list(altas_mydoc_Investors))
-         df_Investors.dropna()
-
-         if not df.empty :
-
-            rest_the_year_df = df.iloc[:,[0,1,2,5,6]].copy()
-
-            dfs = pd.concat([dfs,rest_the_year_df],axis=0)
-
-            dfs_Investors = pd.concat([dfs_Investors,df_Investors],axis=0)
-
-      
+     ### merge data of Season & price
+     dfs = pd.merge(df_Investors,df ,on= ['code']) 
+     
+     ### conver code & name for plot   columns
      dfs['x_code']= dfs.apply(lambda x: x['code']+'_'+ x['code_name'] if pd.notnull(x['code_name']) else  x['code']+'_'+ x['code_name'],axis =1  )
      ### drop nan column
      dfs.dropna(axis='columns')
-     ### merge   
-     df_merge = pd.merge(dfs_Investors,dfs, on = ['code'],how='left')
+     ### merge  for PE sort  
+     df_merge = pd.merge(plot_code,dfs, on = ['code'],how='left')
+     #df_merge = pd.merge(plot_code,dfs, on = ['code'])
+     df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if pd.notnull(x['price']) else  round(float(x['price']) / float(x['the_year']),2),axis =1  )
 
-     #df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if pd.notnull(x['price']) and x['the_year'] != 0 else  round(float(x['price']) / float(x['the_year']),2),axis =1  )
-     df_merge['PE'] = df_merge.apply(lambda x: round(float(x['price']) / float(x['the_year']),2) if (x['price'] !=0 ) and (x['the_year'] != 0)  else  0 ,axis =1  )
      ### select column 
      df_merge = df_merge.iloc[:,[1,7,8]]
-     df_merge=df_merge.sort_values(by=['PE'],ascending = True,ignore_index = True)
-     #df_merge['PE'] = df_merge['PE'].fillna(0)
-
+     
      ### povit table 
      #records = df_merge.pivot(index='last_modify', columns='x_code', values='PE',fill_value=0)
-     records = pd.pivot_table(df_merge, index='last_modify', columns='x_code', values='PE',fill_value=0)
+     ### pivot_table  disable default  srot 
+     records = pd.pivot_table(df_merge, index='last_modify', columns='x_code', values='PE',fill_value=0,sort=False)
 
 
      for idx in range(0,len(records.columns),5):
@@ -593,8 +592,6 @@ def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
           #plt.show()
           plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
           plt.clf()
-
-
 
 
 def Reasonable_Price(limit_y) :
@@ -891,9 +888,9 @@ for idx_com in [com_list, com_lists] :
 
          match_row = match_row_doc[match_row_doc["code"].isin(com_list)]
 
-         if not match_row.empty : 
+         #if not match_row.empty : 
 
-            plot_Stock_Eps_Yield_PE_Season(season,yy,com_list)
+         #   plot_Stock_Eps_Yield_PE_Season(season,yy,com_list)
 
     	 
     else : 	 
@@ -988,7 +985,7 @@ for idx_com in [com_list, com_lists] :
        range_d= len(match_row.columns) -1 ### remove avg/ cheap_check/ seasonable_check                                                                                                                                                                                                              
 
        check_sort_column=['cheap_check','seasonable_check','div_date_check','div_stock_date_check','PE','yield%','avg','cash_div']                                                                                                                                           
-       check_assc = [False,False,False,False,assc ,False,False,False]
+       check_assc = [False,False,False,False,True ,False,False,False]
        rename_col = {'cheap': 'cheap↓','seasonable':'seasonable↓','yield%' : 'yield%↓','PE': 'PE↑','cash_div' : 'cash_div↓' , 'avg':'5avg_yield','div_date':'div_date↓','div_stock_date':'div_stock_date↓'}                                                                  
 
 
@@ -1016,10 +1013,12 @@ for idx_com in [com_list, com_lists] :
         match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
 
         ## code
-        if idx == 0 :
-           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+        #if idx == 0 :
+        #   match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
     
-        elif idx == 4 :
+        #elif idx == 4 :
+        if idx == 4 :
+
            match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x  if x <0  else f'<font color="red">+%s</font>' % x if x > 0 else 0)
         ## 'yield_60%' , 'yield%'
         elif idx == 6 :
@@ -1029,7 +1028,8 @@ for idx_com in [com_list, com_lists] :
         ### ROE >=15
         elif idx == 8 :
 
-           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Coral;">%s</p>' % x  if x >=15  else  str(x))
+           #match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:Coral;">%s</p>' % x  if x >=15  else  str(x))
+           match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x  if x >=20  else  f'<p style="background-color:Violet;">%s</p>' % x  if x >=15  else   str(x))
 
 
     
@@ -1076,7 +1076,7 @@ for idx_com in [com_list, com_lists] :
              if idx == 16 :
     
     
-                match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
+                #match_row.iloc[:,10] =  compare_data.apply(lambda  x: f'<p style="background-color:LightSalmon;">%s</p>' % x[compare_name[1]]  if float(x[compare_name[0]]) <= float(x[compare_name[2]])   else x[compare_name[1]],axis=1)
               
                 compare_data_p_stype = pd.concat([compare_data_p_stype,match_row.iloc[:,5]] ,axis=1)  ## adding column[price]
                 
@@ -1110,7 +1110,27 @@ for idx_com in [com_list, com_lists] :
     ### sort columns 
     match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
 
-    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))  ### PE by sort 
+
+            ### for plot
+    if len(idx_com) == len(com_list) :
+
+        #plot_code = match_row['code'].apply(lambda  x:  x.split('target="_blank">')[1].split('</a>')[0]  if  pd.notnull(x)  else str(x))
+
+        df_com = pd.DataFrame(data=com_list,columns=['code'])
+
+        #plot_sort = pd.merge(plot_code,df_com,on='code')      
+        plot_sort = pd.merge(match_row['code'],df_com,on='code')      
+        
+        #print('plot_sort:',plot_sort.info()) 
+        plot_Stock_Eps_Yield_PE_Season(season,yy,plot_sort)  ### all data
+        #plot_Stock_Eps_Yield_PE_Season(season,yy,com_list,plot_code)
+
+
+    ### Target  link  for  code
+    match_row.iloc[:,0] = match_row.iloc[:,0].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if  pd.notnull(x)   else  x)
+
+    ### color for PE
+    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
 
     match_row=match_row.iloc[:,range_s:range_d].copy() ### remove 5avg_yield
 
@@ -1124,7 +1144,11 @@ for idx_com in [com_list, com_lists] :
            match_row = pd_table.add_columns_into_row(match_row ,20)
            body = match_row.to_html(classes='table table-striped',escape=False)
            send_mail.send_email('Stock_Eps_Yield_PE_{today}_com_Q{s}'.format(today=date_sii,s=season),body)
+
     else :
         #print(match_row.to_html(escape=False))
         print(match_row.head(100))
 
+end_time = time.perf_counter()
+run_time = end_time - start_time
+print(f"程式執行時間：{run_time} 秒")
