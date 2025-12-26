@@ -12,7 +12,11 @@ import re
 #import line_notify
 import random
 from fake_useragent import UserAgent
-
+from io import StringIO
+import urllib3
+### disable  certificate verification
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from requests.exceptions import ChunkedEncodingError, ConnectionError
 
 
 url ='https://mopsov.twse.com.tw/mops/web/t05sr01_1'
@@ -44,7 +48,7 @@ def get_redis_data(_key,_type,_field_1,_field_2):
 
 def delete_redis_data(today):
     
-     dd = 10 ##days :10
+     dd = 14 ##days :14
      while  len(r.keys('*_skey_lists')) >2 and dd > 1 :
  
        yy = today - datetime.timedelta(days=dd)
@@ -55,38 +59,6 @@ def delete_redis_data(today):
           
        dd -=1  
      
-"""
-def reurl_API(link_list):
-     
-     reurl_link_list = []
-
-     reurl_api_key = "".join(get_redis_data("reurl_key",'lrange',0,-1))  ## list_to_str
-
-     s_reurl = 'https://api.reurl.cc/shorten'
-     s_header = {"Content-Type": "application/json" , "reurl-api-key": reurl_api_key}
-     
-     for link in link_list : 
-       uurl = link.split('href="')[1].split('">')[0] 
-       s_data = {"url": uurl}
-
-       r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
-
-       try :
-           rerul_link = r["short_url"]
-       except :
-           rerul_link = link
-
-       reurl_link_list.append(rerul_link)
-
-#       r = requests.post(s_reurl, json= s_data , headers=s_header ).json()
-#       reurl_link_list.append(r["short_url"])
-
-       time.sleep(round(random.uniform(0.5, 1.0), 10))
-
-     return reurl_link_list
-
-"""
-
 
 
 def reurl_API(link_list,_key):
@@ -205,21 +177,50 @@ def  hot_new_key_wd(url,today):
 
      user_agent = UserAgent()   
      #r = requests.post(url)
-     r =  requests.post(url ,  headers={ 'user-agent': user_agent.random })
-     r.encoding = 'utf8'    
-     
-     soup = BeautifulSoup(r.text, 'html.parser')
-     try : 
-         link = soup.find_all('input',attrs={"value": "詳細資料"})
-         df = pd.read_html(r.text)[7]
-         df_8 = pd.read_html(r.text)[8]
 
-         if not df_8.empty :
-            df_8.columns=['公司代號', '公司簡稱', '發言日期', '發言時間', '主旨', 'Unnamed: 5']
-            df = pd.concat([df,df_8])
+     session = requests.Session()
+     adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
+     session.mount('http://', adapter)
+     session.mount('https://', adapter)
+
+     r = None 
+
+     for i in range(3) :
+
+        try :
+
+            #r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False,stream=False,timeout=(5,20))
+            r = session.post( url, headers={'user-agent': user_agent.random, 'Connection': 'keep-alive'}, verify=False,stream=True, timeout=(5, 20) )
+            r.encoding = 'utf8'
+            print(r.status_code)
+            break
+            
+
+        except (ChunkedEncodingError, ConnectionError) as e:
+            ### Avoid Connection broken: IncompleteRead
+            print(f"第 {i+1} 次嘗試失敗：{e}")
+            time.sleep(random.randrange(2, 5, 1))
+            
+ 
+     if r is None :
+
+               raise RuntimeError("多次嘗試後仍無法成功連線")
+     
+
+     try :
+     
+            soup = BeautifulSoup(r.text, 'html.parser')
+            link = soup.find_all('input',attrs={"value": "詳細資料"})
+            df = pd.read_html(StringIO(r.text))[7]
+            df_8 = pd.read_html(StringIO(r.text))[8]
+
+            if not df_8.empty :
+               df_8.columns=['公司代號', '公司簡稱', '發言日期', '發言時間', '主旨', 'Unnamed: 5']
+               df = pd.concat([df,df_8])
      
      except : 
-       return {}           
+            print('多次嘗試後仍無法成功連線')
+            return{}           
 
      link_list = []
      skey_list = []   
@@ -281,10 +282,8 @@ def  hot_new_key_wd(url,today):
  
        #insert_redis_data('skey_lists',match_row['skey_lists'].values) 
        line_display_list = insert_redis_data(rediskeys,match_row['skey_lists'].values)     
-       line_key_list=[]
        tg_key_list=[]
        tg_chat_id=[]
-       line_key_list.append( get_redis_data('line_key_hset','hget','Stock_YoY','NULL'))  ## use signle line key
        tg_key_list.append(get_redis_data('tg_bot_hset','hget','@stock_broadcast_2024bot','NULL')) ## for tg_bot of signle
        tg_chat_id.append(get_redis_data('tg_chat_id','hget','stock_broadcast','NULL')) ## for tg_bot of signle
 
@@ -293,9 +292,7 @@ def  hot_new_key_wd(url,today):
        match_row_line = match_row[match_row['skey_lists'].isin(line_display_list)].copy() ### new arrary
        ##short url 
        match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values , 'reurl_key')
-       #match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values , 'ssur_key') -- bug
        
-       #match_row_line['URL'] = reurl_API(match_row_line['URL_All'].values )
 
        match_row_line_notify = match_row_line.iloc[:,[0,1,3,4,8]]  ## for line notify
        match_row_line_notify = match_row_line_notify.astype({'公司代號':int})  ##fix dtype folat to int64
@@ -311,18 +308,6 @@ def  hot_new_key_wd(url,today):
               tg_msg ="【Stock_NEWS】 "+ "\n" + msg
               deadline_check = datetime.date.today().strftime("%Y-%m-%d") 
               ### for multiple line group
-              #for line_key in  range(len(line_key_list)-3) : ## Stock_YoY[0]/Stock[1]/rss_google[2]
-              #for line_key in  range(len(line_key_list)) : 
-                  #send_line_notify(line_key_list[line_key],msg) 
-             
-              ### line notify colse on '2025-03-31'
-              deadline_check = datetime.date.today().strftime("%Y-%m-%d")
-              if  deadline_check <= '2025-03-31' : 
- 
-                  for line_key in  line_key_list : ##
-                      send_line_notify(line_key, msg)   
-                      time.sleep(random.randrange(1, 3, 1))
-
               for tg_key in  tg_key_list : ## 
                   send_tg_bot_msg(tg_key,tg_chat_id[0],tg_msg)
                   time.sleep(random.randrange(1, 3, 1))
