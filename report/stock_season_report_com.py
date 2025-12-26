@@ -677,11 +677,11 @@ for idx_com in [com_list, com_lists] :
             ## for email
             the_sst = "EPS_{}_Q{}".format(s_year,s_season)
             last_sst = "EPS_{}_Q{}".format(int(s_year)-1,s_season)
-     
+            m_today = datetime.date.today().strftime("%Y%m%d")
+
             match_row.rename(columns={'the_year': the_sst , 'last_year' : last_sst}, inplace=True)
             match_row = pd_table.add_columns_into_row(match_row ,20) 
             body = match_row.to_html(classes='table table-striped',escape=False)
-            m_today = datetime.date.today().strftime("%Y%m%d")
             send_mail.send_email('{year}_Stock_Q{season}_Report_{today}' .format(year = s_year ,season=s_season,today=m_today ) ,body)
         else :
            print(match_row.to_html(escape=False))
