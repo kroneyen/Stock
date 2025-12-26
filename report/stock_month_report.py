@@ -20,6 +20,9 @@ from matplotlib.font_manager import fontManager
 import random
 from io import StringIO
 import urllib3
+import pandas_table as pd_table
+
+
 ### disable  certificate verification
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -211,66 +214,60 @@ report ,report_100 , report_day = monthly_report()
 mail_month =str(report_day.month)
 mail_date =  datetime.date.today()
 
-#print(report.info())
-#print(report_100.info())
-for rep_idx in [0,1] : 
 
-  if  not report_100.empty :
+
+for rep_idx in [0,1] :
+
 
     if  rep_idx == 0 and (not report.empty):
 
-         Plot_Rep_Stock_Month(report,report_day)
- 
+          Plot_Rep_Stock_Month(report,report_day)
+
     else  :
 
-       report = report_100.copy() 
+         report = report_100.copy()
 
-    
-    #print(report.info())
-
-    for idx in range(0,len(report.columns)) :
-
-        if idx == 0 :
-
-           report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<a href="https://tw.stock.yahoo.com/quote/%s/revenue" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
-  
-        
-
-        elif idx == 4 or  idx == 7 :
-
-           report[report.columns[idx]] = report[report.columns[idx]].astype(object) 
-           #report.iloc[:, idx] = report.iloc[:, idx].astype(object)
-           #print(report.info())
-           #report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">%s</font>' % str(x) if x < 0 else str(x))
-           report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
-
+    if  not report.empty   :
+        ### column color 
+        for idx in range(0,len(report.columns)) :
+             
+               ### fix   dtype: object  has dtype incompatible of  pandas 2.3.3 
+               report[report.columns[idx]] = report[report.columns[idx]].astype(object)
+             
+               if idx == 0 :
+             
+                  report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<a href="https://tw.stock.yahoo.com/quote/%s/revenue" target="_blank">%s</a>' %( x , x )  if int(x) >0  else  x)
+             
+             
+             
+               elif idx == 4 or  idx == 7 :
+             
+                  report[report.columns[idx]] = report[report.columns[idx]].astype(object)
+                  report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="red">+%s</font>' % x if x > 0 else  f'<font color="green">%s</font>' % x)
+             
+               else :
+             
+                    if  idx > 1 :
+             
+                        report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else  x)
+             
+        ### mail time
+        if (time.strftime("%H:%M:%S", time.localtime()) > mail_time)  and (not report.empty):
+             
+                    ###  add_columns_into_row 
+                    report = pd_table.add_columns_into_row(report ,20)
+             
+                    body = report.to_html(escape=False)
+                    send_mail.send_email('Stock_Month_{month}_Report_{date}'.format(month=mail_month, date=mail_date),body)
+             
         else :
+                    report = report.to_markdown(index= 0)
+                    print('stock_month_%s_report' % mail_month)
+                    print(report)
 
-             if  idx > 1 : 
+    else : ### report is empty
+        print('stock_month_%s_report not result' % mail_month)
 
-                 report.iloc[:,idx] = report.iloc[:,idx].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else  x)
-
-
-
-
-
-    if time.strftime("%H:%M:%S", time.localtime()) > mail_time :
-       body = report.to_html(escape=False)
-       #print('body:',body)
-       #send_mail.send_email('stock_month_report',body)
-       #send_mail.send_email('Stock_Month_%s_Report' % mail_month ,body)
-       send_mail.send_email('Stock_Month_{month}_Report_{date}'.format(month=mail_month, date=mail_date),body)
-
-    else :
-      report = report.to_markdown(index= 0)
-      #print(report.to_string(index=False))
-      print('stock_month_%s_report' % mail_month)
-      print(report)
-
-  else :
-      print('stock_month_%s_report not result' % mail_month)
-
-  time.sleep(random.randrange(3, 5, 1))  
-  ### del images/*.png
-  del_png.del_images()
- 
+    time.sleep(random.randrange(3, 5, 1))
+    ### del images/*.png
+    del_png.del_images() 
