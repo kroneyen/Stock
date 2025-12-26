@@ -145,7 +145,7 @@ def send_mail(fromaddr, toaddr, subject, message):
 """
 
 
-def send_email(subject, body):
+def send_email(subject, body,m_to):
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -159,7 +159,7 @@ def send_email(subject, body):
     r = redis.Redis(connection_pool=pool)
 
     m_from = r.hget('mail','m_from')
-    m_to = r.hget('mail','m_to')
+    #m_to = r.hget('mail','m_to')
     #m_pwd = r.hget('mail','m_pwd')
 
     FROM = m_from
