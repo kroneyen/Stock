@@ -222,10 +222,12 @@ for rep_idx in [0,1] :
     if  rep_idx == 0 and (not report.empty):
 
           Plot_Rep_Stock_Month(report,report_day)
+          
 
-    else  :
+    elif rep_idx == 1:
 
          report = report_100.copy()
+         
 
     if  not report.empty   :
         ### column color 
@@ -266,7 +268,7 @@ for rep_idx in [0,1] :
                     print(report)
 
     else : ### report is empty
-        print('stock_month_%s_report not result' % mail_month)
+        print('stock_month_%s_report com not result' % mail_month)
 
     time.sleep(random.randrange(3, 5, 1))
     ### del images/*.png
