@@ -293,6 +293,8 @@ def rss_get(com_list_name,web_list,exclude_tag):
 
     #insert_redis_data('skey_lists',match_row['skey_lists'].values) 
     line_display_list = insert_redis_data(rediskeys,match_row['URL'].values)
+
+    #print('297_line_display_list:',line_display_list) 
     
     ## check new array 
     ###### wait
@@ -302,7 +304,8 @@ def rss_get(com_list_name,web_list,exclude_tag):
     return match_row_line.sort_values(by=['pubTime'])
     #return match_row.sort_values(by=['pubDate'])
 
-com_list = []
+com_list_code = []
+com_list_name = []
 extra_tag=[]
 exclude_tag=[]
 web_list=[]
@@ -313,12 +316,13 @@ try :
 
   ### got mongo data from atlas
   dictt = {}
-  _columns= {"code":1,"_id":0}
+  #_columns= {"code":1,"_id":0}
+  _columns= {"code":1,"name":1,"_id":0}
   _tag_columns= {"tag":1,"_id":0}
   _url_columns= {"url":1,"_id":0}
 
 
-  mydoc = atlas_read_mongo_db('stock','com_list',dictt,_columns)
+  mydoc = atlas_read_mongo_db('stock','view_com_list_name',dictt,_columns)
   mydoc_tag = atlas_read_mongo_db('stock','extra_tag',dictt,_tag_columns)
   time.sleep(round(random.uniform(0.5, 1.0), 10))
 
@@ -328,7 +332,8 @@ try :
 
 
   for idx in mydoc :
-    com_list.append(idx.get('code'))
+    com_list_code.append(idx.get('code'))
+    com_list_name.append(idx.get('name'))
   for idx in mydoc_tag :
     extra_tag.append(idx.get('tag'))
   for idx in mydoc_exclude_tag :
@@ -338,10 +343,10 @@ try :
 
 
   ### compare redis com_list code from mongo sync to redis data 
-  if (collections.Counter(com_list) != collections.Counter(redis_com_list)) and (len(com_list) > 0) :
-     insert_com_list_redis_data('com_list',com_list)
+  if (collections.Counter(com_list_code) != collections.Counter(redis_com_list)) and (len(com_list) > 0) :
+     insert_com_list_redis_data('com_list',com_list_code)
      
-     for com in com_list :
+     for com in com_list_code :
        _values = { 'code' : com ,'last_modify':datetime.datetime.now() }
        insert_mongo_db('stock','com_list',_values)
 except :
@@ -351,14 +356,14 @@ except :
 
 
 #com_list = get_redis_data('com_list','lrange',0,-1)
-com_list_name = []
+#com_list_name = []
 
-
+"""
 ## get mapping com_list_name
 for com in com_list : 
    name =  get_redis_data('com_lists','hget',com,'NULL')
    com_list_name.append(name)
-
+"""
 ## extra tag group
 #extra_tag=['晶圓','特斯拉','財報','蘋果','Facebook','FB','Meta','谷歌','離岸風電','電動車','被動元件','車用晶片','AMD','Nvida','Apple','Mac','Mini LED','MicroLED','Google','自動駕駛','充電站','元宇宙','Omicron','國際油價','Peloton','健身器材','道瓊','ASML','Applied Materials','應材','MLCC','AR／VR','停工','烏克蘭','俄烏','低軌衛星','Starlink','SpaceX','infineon','英飛凌']
 
