@@ -113,9 +113,11 @@ def get_colleciton_name(_conn,_db) :
 
 
 
-def insert_redis_data(_key,_values):
+def hmset_insert_redis_data(_key,_values):
 
-        r.hmset(_key,_values)
+        #r.hmset(_key,_values)
+        ##  DeprecationWarning: Call to deprecated hmset. (Use 'hset' instead.) -- Deprecated since version 4.0.0.)
+        r.hset(_key,mapping=_values)
 
 
 
@@ -283,7 +285,9 @@ for index in range(len(com_lists)) :
    #_values = { str(com_lists.iloc[index,0]) :  str(com_lists.iloc[index,1]) , str(com_lists.iloc[index,0]) + '_au' : str(com_lists.iloc[index,2] ) ,  str(com_lists.iloc[index,0]) + '_p' :  str(com_lists.iloc[index,3])  }
    _values = {  str(com_lists.iloc[index,0])+':code' :  str(com_lists.iloc[index,1]) , str(com_lists.iloc[index,0]) + ':auth_stock' : str(com_lists.iloc[index,2] ) , str(com_lists.iloc[index,0]) +':type' :  str(com_lists.iloc[index,3])  }
 
-   insert_redis_data("com_lists",_values )
+   
+   #insert_redis_data("com_lists",_values )
+   hmset_insert_redis_data("com_lists",_values )
 
 time.sleep(random.randrange(1, 3, 1))
 
@@ -356,12 +360,19 @@ createIndex_mongo_db('conn','stock','com_list',com_list_index)
 createIndex_mongo_db('c','stock','com_lists',com_lists_index)
 createIndex_mongo_db('conn','stock','com_lists',com_lists_index)
 
-
+"""
 dictt = {}
 _columns= {"code": 1,"name": 1,"auth_stock":1,"type":1,"_id": 0}
 
 mydoc = read_mongo_db('c','stock','com_lists',dictt,_columns)
+"""
+if __name__ == '__main__':
 
-for idx in mydoc :
-  #print(idx.get('code'),idx.get('name'))
-  print(idx.get('code'),idx.get('name'),idx.get('auth_stock'),idx.get('type'))
+  dictt = {}
+  _columns= {"code": 1,"name": 1,"auth_stock":1,"type":1,"_id": 0}
+  mydoc = read_mongo_db('c','stock','com_lists',dictt,_columns)
+
+
+  for idx in mydoc :
+      #print(idx.get('code'),idx.get('name'))
+      print(idx.get('code'),idx.get('name'),idx.get('auth_stock'),idx.get('type'))
