@@ -235,7 +235,8 @@ def Dividend_goodinfo(years) :
          ### save Dividend_file path
          
          #old = './Dividend_file/StockList.html'
-         old = file_path +'/StockList.html'
+         ###  web change version  20260424
+         old = file_path +'/Report.html'
 
          if url_idx == 0 : 
            
@@ -257,25 +258,32 @@ def Dividend_goodinfo(years) :
              web.get(url)
              time.sleep(random.randrange(10 ,20, 1))
          
-             html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr[5]/td[2]/input[3]'
+             #html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr[5]/td[2]/input[3]'
+             html_d ='//*[@id="txtStockListData"]/table/tbody/tr[5]/td[2]/input[3]'
              ads_button = "ats-interstitial-button"
              ### download file
 
              try :
 
-                 ads_iframe_close =  WebDriverWait(web, 5).until(EC.element_to_be_clickable((By.ID,ads_button)))
+                 ads_iframe_close =  WebDriverWait(web, 20).until(EC.element_to_be_clickable((By.ID,ads_button)))
                  ads_iframe_close.click()
                  time.sleep(random.randrange(3, 5, 1))
                  print('have ads')
              except : 
-                continue 
+                     print('no ads')
+                     continue                 
  
              finally  : 
-                file_download = WebDriverWait(web, 15).until(EC.element_to_be_clickable((By.XPATH,html_d)))
+
+                #file_download = WebDriverWait(web, 20).until(EC.element_to_be_clickable((By.XPATH,html_d)))
                 #time.sleep(random.randrange(3, 5, 1))
+                target_value = "匯出HTML"
+                file_download = WebDriverWait(web, 20).until(EC.element_to_be_clickable((By.XPATH, f"//*[@value='{target_value}']")))
+                web.execute_script("arguments[0].scrollIntoView({block:'center'});", file_download)                
                 file_download.click()
 
                 time.sleep(random.randrange(5, 10, 1))
+                print('click success')
         
                 if  os.path.exists(old) :
                     break
@@ -291,9 +299,12 @@ def Dividend_goodinfo(years) :
          dfs = df.iloc[:,[1,2,15,4,18,9]]
          dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date']
          """
+         #print(df.info())
          #dfs = df.iloc[:,[1,2,15,4,18,9,5]]
-         ### change web version 
-         dfs = df.iloc[:,[0,1,7,6,16,15,9]]
+         ###  web change  version 
+         #dfs = df.iloc[:,[0,1,7,6,16,15,9]]
+         ###  web change version  20260424
+         dfs = df.iloc[:,[0,1,7,6,16,15,3]]
                   	  	
          dfs.columns = ['code','code_name','cash_dividend','dividend_date','stock_dividend','dividend_stock_date','price']
          
@@ -306,16 +317,16 @@ def Dividend_goodinfo(years) :
          dfs = dfs[dfs['dividend_date'].str.contains(year, na=False)] ## filter not match years
          
          #dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace(' 即將除息','').replace(' 今日除息','').replace(year,"")  if pd.notnull(x) and re.match(year, x)  else np.NAN  )
-         dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace('即將除息','').replace('今日除息','').replace(year,"").replace(r'\s+','')  if pd.notnull(x) and re.match(year, x)  else np.NAN  )
+         dfs['dividend_date'] = dfs['dividend_date'].apply(lambda x: x.replace('即將除息','').replace('今日除息','').replace(year,"").replace(r'\s+','')  if pd.notnull(x) and re.match(year, x)  else np.nan  )
          #dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace(year,"")  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.NAN if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
-         dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace('即將除權','').replace('今日除權','').replace(year,"").replace(r'\s+','')  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.NAN if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
+         dfs['dividend_stock_date'] = dfs.apply(lambda x: x['dividend_stock_date'].replace('即將除權','').replace('今日除權','').replace(year,"").replace(r'\s+','')  if pd.notnull(x['dividend_stock_date']) and re.match(year, x['dividend_stock_date']) else np.nan if x['stock_dividend'] == 0  else x['dividend_date'] ,axis=1 )
          
          dfs['dividend_date'] = dfs.apply(lambda x : checked(x['cash_dividend'],x['dividend_date']) ,axis=1 )
          dfs['cash_dividend'] = dfs.apply(lambda x : dividend_checked(x['cash_dividend']) ,axis=1 )
          dfs['dividend_stock_date'] = dfs.apply(lambda x : checked(x['stock_dividend'],x['dividend_stock_date']) ,axis=1 )
          dfs['stock_dividend'] = dfs.apply(lambda x : dividend_checked(x['stock_dividend']) ,axis=1 )
          
-         dfs['years'] = dfs['code'].apply(lambda x: str(years)  if pd.notnull(x)  else np.NAN )
+         dfs['years'] = dfs['code'].apply(lambda x: str(years)  if pd.notnull(x)  else np.nan )
          
          
          ### get mongo data

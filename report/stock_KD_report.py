@@ -7,7 +7,6 @@ import line_notify
 import send_mail
 from pymongo import MongoClient
 from fake_useragent import UserAgent
-import del_png
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,6 +16,7 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 import random
 import del_png
 import numpy as np
@@ -188,8 +188,11 @@ def dividend_checked(x) :
 
 def KDJ_indicator_goodinfo(url,idx) :
 
-    old = file_path +'/StockList.html'
-    html_list = ['/Daily_StockList_L_20.html','/Daily_StockList_H_80.html','/Daily_StockList_L_20_M.html']
+    #old = file_path +'/StockList.html'
+    ###  web change version  20260424
+    old = file_path +'/Report.html'
+
+    html_list = ['/Daily_StockList_L_20.html','/Daily_StockList_H_80.html','/Daily_StockList_L_20_M.html','/Daily_StockList_G_C.html','/Daily_StockList_G_M.html']
 
     web_times = 3
     web_check = 0
@@ -204,7 +207,8 @@ def KDJ_indicator_goodinfo(url,idx) :
           try :
               web.get(url)
               time.sleep(random.randrange(5, 10, 1))
-              html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr[5]/td[2]/input[3]'
+              #html_d ='/html/body/table[2]/tbody/tr[2]/td[3]/main/section/table/tbody/tr[5]/td[2]/input[3]'
+              html_d ='//*[@id="txtStockListData"]/table/tbody/tr[5]/td[2]/input[3]'
               ads_button = "ats-interstitial-button"
               #print('web_get is sucesses')
 
@@ -213,35 +217,41 @@ def KDJ_indicator_goodinfo(url,idx) :
 
               while download_times > check  :
                   ### download file
+                  
                   try :
-                         if   check > 0 : 
-                             web.get(url)
-                             time.sleep(random.randrange(5, 10, 1))
-                         else  :
 
-                           ads_iframe_close =  WebDriverWait(web, 10).until(EC.element_to_be_clickable((By.ID,ads_button)))
+                           ads_iframe_close =  WebDriverWait(web, 20).until(EC.element_to_be_clickable((By.ID,ads_button)))
                            ads_iframe_close.click()
                            time.sleep(random.randrange(1, 3, 1))
-                           print('have ads')
+                           print('have ads')                       
                   except :
                      print('no ads')
                      continue
                      
-
+                  
                   finally :
-                     file_download = WebDriverWait(web, 10).until(EC.element_to_be_clickable((By.XPATH,html_d)))
-                     file_download.click()
-                     time.sleep(random.randrange(5, 10, 1))
-                     #print('old:',old)
+
+                      try: 
+
+                        target_value = "匯出HTML" 
+                        file_download = WebDriverWait(web, 20).until(EC.element_to_be_clickable((By.XPATH, f"//*[@value='{target_value}']")))
+                        web.execute_script("arguments[0].scrollIntoView({block:'center'});", file_download)
+                        file_download.click()
+                        time.sleep(random.randrange(5, 10, 1))
+                        print('click success')
+
+                      except TimeoutException:   
+
+                        print(f"Element with value '{target_value}' was not clickable within the timeout period.")
               
               
-                     if  os.path.exists(old) :
+                      if  os.path.exists(old) :
               
-                       print('patch is exists')
-                       check =3
+                          print('patch is exists')
+                          check =3
               
               
-                     else :
+                      else :
                         try :
                            web.navigate().refresh()
                            print('navigate')
@@ -261,14 +271,15 @@ def KDJ_indicator_goodinfo(url,idx) :
               web_check =3
 
           ### web check retry
+           
           except :
               
-             print('check_web:',web_check)
-             ### close web driver restart
-             time.sleep(random.randrange(1, 5, 1))
-             web_check +=1
-             continue        
-
+              print('check_web:',web_check)
+              ### close web driver restart
+              time.sleep(random.randrange(1, 5, 1))
+              web_check +=1
+              continue        
+          
     file_html = file_path + html_list[idx]
 
     os.rename(old, file_html)
@@ -321,8 +332,29 @@ url_L_20 = 'https://goodinfo.tw/tw/StockList.asp?RPT_TIME=&MARKET_CAT=%E6%99%BA%
 url_H_80 = 'https://goodinfo.tw/tw/StockList.asp?RPT_TIME=&MARKET_CAT=%E6%99%BA%E6%85%A7%E9%81%B8%E8%82%A1&INDUSTRY_CAT=%E6%97%A5D%E5%80%BC%E9%AB%98%E6%96%BC80%40%40%E6%97%A5KD%E8%90%BD%E9%BB%9E%40%40D%E5%80%BC%E9%AB%98%E6%96%BC80'  
 url_L_20_M = 'https://goodinfo.tw/tw/StockList.asp?RPT_TIME=&MARKET_CAT=%E6%99%BA%E6%85%A7%E9%81%B8%E8%82%A1&INDUSTRY_CAT=%E6%9C%88D%E5%80%BC%E4%BD%8E%E6%96%BC20%40%40%E6%9C%88KD%E8%90%BD%E9%BB%9E%40%40D%E5%80%BC%E4%BD%8E%E6%96%BC20' 
 
-mail_list = ['KD_L_20','KD_H_80','M_KD_L_20']
-url_list = [url_L_20,url_H_80,url_L_20_M]
+### 日KD即將黃金交叉
+url_G_C = 'https://goodinfo.tw/tw/StockList.asp?RPT_TIME=&MARKET_CAT=%E6%99%BA%E6%85%A7%E9%81%B8%E8%82%A1&INDUSTRY_CAT=%E6%97%A5KD%E5%8D%B3%E5%B0%87%E9%BB%83%E9%87%91%E4%BA%A4%E5%8F%89%40%40%E6%97%A5KD%E7%9B%B8%E4%BA%92%E4%BA%A4%E5%8F%89%40%40KD%E5%8D%B3%E5%B0%87%E9%BB%83%E9%87%91%E4%BA%A4%E5%8F%89'
+
+### 週KD黃金交叉 – KD指標
+url_G_C_W = 'https://goodinfo.tw/tw/StockList.asp?RPT_TIME=&MARKET_CAT=%E6%99%BA%E6%85%A7%E9%81%B8%E8%82%A1&INDUSTRY_CAT=%E9%80%B1KD%E9%BB%83%E9%87%91%E4%BA%A4%E5%8F%89%40%40%E9%80%B1KD%E7%9B%B8%E4%BA%92%E4%BA%A4%E5%8F%89%40%40KD%E9%BB%83%E9%87%91%E4%BA%A4%E5%8F%89'
+
+mail_list = ['KD_L_20','KD_H_80','M_KD_L_20','MACD_Gold_Cross','MACD_Gold_Cross_W']
+#mail_list = ['KD_L_20']
+url_list = [url_L_20,url_H_80,url_L_20_M,url_G_C,url_G_C_W]
+
+#### Get MACD data
+MACD_list = []
+
+macd_dictt = {}
+
+macd_columns = {"_id":0 ,"code":1}
+
+mydoc_MACD = read_mongo_db('stock','Stock_MACD_Negative_Daily',macd_dictt,macd_columns)
+
+for idx in mydoc_MACD :
+    MACD_list.append(idx.get('code'))
+
+#print('MACD_list:',MACD_list)
 
 
 for url_idx in range(0,len(mail_list)) : 
@@ -336,7 +368,7 @@ for url_idx in range(0,len(mail_list)) :
        
        ### get 5 years data avg over 5%
        
-       _yield_avg = 5
+       _yield_avg = 1
        
        dictt = {"yield_avg" :{"$gte" : _yield_avg}}
        
@@ -352,7 +384,7 @@ for url_idx in range(0,len(mail_list)) :
        
        dictt = {}
        
-       _columns = {"_id":0 ,"code":1,"cheap":1,"seasonable":1,"expensive":1}
+       _columns = {"_id":0 ,"code":1,"price":1,"cheap":1,"seasonable":1,"expensive":1}
        
        mydoc = read_mongo_db('stock','Stock_Eps_Yield_PE_Daily',dictt,_columns)
        
@@ -361,12 +393,15 @@ for url_idx in range(0,len(mail_list)) :
        match_row = pd.merge(match_row,mydoc_pe_daily,on='code',how='left')
        
        
-       
+
        #if not match_row.empty and time.strftime("%H:%M:%S", time.localtime()) > mail_time :
        if not match_row.empty :
-       
+
+   
        
               for  idx in [0,2,3,4] :
+
+                   #match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
        
                    if idx in [2,3,4] :
        
@@ -376,7 +411,8 @@ for url_idx in range(0,len(mail_list)) :
          
                       ### hightline code_name 
        
-                     match_row.iloc[:,idx+1] = match_row.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' %  x['code_name']  if  (x['code'] in com_list) else x['code_name'],axis=1 )
+                     #match_row.iloc[:,idx+1] = match_row.apply(lambda  x: f'<p style="background-color:Aqua;">%s</p>' %  x['code_name']  if  (x['code'] in com_list) else x['code_name'],axis=1 )
+                     match_row.iloc[:,idx+1] = match_row.apply(lambda  x: f'<p style="background-color:Wheat;">%s</p>' %  x['code_name']  if  (x['code'] in MACD_list) else f'<p style="background-color:Aqua;">%s</p>' %  x['code_name']  if  (x['code'] in com_list)  else x['code_name'],axis=1 )
                      match_row.iloc[:,idx] = match_row.iloc[:,idx].apply(lambda  x: f'<a href="https://www.wantgoo.com/stock/%s/dividend-policy/ex-dividend" target="_blank">%s</a>' %( x , x )  if pd.notnull(x)  else  x)
        
             
@@ -385,11 +421,19 @@ for url_idx in range(0,len(mail_list)) :
         
               ### code /K_day/D_day
               match_row['KDJ'] = match_row.apply(lambda x: "K:"+ x[kd_data_name[1]]+" "+"D:"+x[kd_data_name[2]] +" "+"J:"+x[kd_data_name[3]] if pd.notnull(x[kd_data_name[0]]) else "K:"+x[kd_data_name[1]]+" "+"D:"+x[kd_data_name[2]] +" "+"J:"+x[kd_data_name[3]], axis=1)
-              match_row = match_row.iloc[:,[0,1,5,6,7,8,9,10,11]].copy()
+              match_row = match_row.iloc[:,[0,1,5,6,7,8,9,10,11,12]].copy()
               match_row.rename(columns={'price_avg': 'price_5_avg', 'yield_avg': 'yield_5_avg'}, inplace=True)
               ### price < price_5_avg to  hight line 
-              match_row.iloc[:,[2]] =match_row.apply(lambda  x: f'<p style="background-color:#ffdead;">%s</p>' %  float(x['price'])  if  (float(x['price']) < x['price_5_avg']) else float(x['price']),axis=1 )
+              #match_row.iloc[:,[2]] =match_row.apply(lambda  x: f'<p style="background-color:Thistle;">%s</p>' %  float(x['price'])  if  (float(x['price']) < x['price_5_avg']) else float(x['price']),axis=1 )
+              ### fix  : incompatible dtype is deprecated 
+              match_row['price_x'] = match_row['price_x'].astype(object)
+              match_row.iloc[:,[2]] =match_row.apply(lambda  x: x['price_y']  if  pd.notnull(x['price_y']) else f'<p style="background-color:Thistle;">%s</p>' %  float(x['price_x']) if   (float(x['price_x']) < x['price_5_avg']) else float(x['price_x']),axis=1 )
+
+              match_row.drop('price_y',axis=1 ,inplace=True)
+              match_row.rename(columns={'price_x': 'price'}, inplace=True)
+
               match_row = match_row.sort_values(by='yield_5_avg',ascending=False,ignore_index = True)
+
               ### add coloumns into row
               match_row = pd_table.add_columns_into_row(match_row ,20)
         
@@ -397,11 +441,11 @@ for url_idx in range(0,len(mail_list)) :
               send_mail.send_email('Stock_KD_Report_Daily_{m_title}_{today}'.format(m_title=mail_list[url_idx],today=last_modify),body)
               print('mail_list:',mail_list[url_idx]) 
        
-       time.sleep(random.randrange(5, 10, 1))
+       time.sleep(random.randrange(10, 20, 1))
 
     except :   
-        print('mail_list:',mail_list[url_idx] , 'is failed')
-        continue 
+           print('mail_list:',mail_list[url_idx] , 'is failed')
+           continue 
 
 ###  close web
 if web :
