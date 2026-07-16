@@ -216,23 +216,25 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
   for url in url_list :
 
      #r = requests.get(url , headers={ 'user-agent': user_agent.random }) 
-     r = requests.get(url , headers={ 'user-agent': user_agent.random },verify=False) 
+     r = requests.get(url , headers={ 'user-agent': user_agent.random },verify=False,timeout=15) 
      r.encoding = 'utf8'
      #df = pd.read_html(r.text,thousands=",",timeout=1)[0]
      #r = requests.get(url)                             
      #r.encoding = 'utf8'                                         
      if r.status_code == 200 :                                   
        ### try to solve No tables found
+
        try :                                                     
           df = pd.read_html(StringIO(r.text),thousands=",")[0]
           #df = pd.read_html(r.text,thousands=",")[0]
        except :                                                  
                                                                  
-          time.sleep(random.randrange(30, 60, 10))                  
+          time.sleep(random.randrange(60, 120, 10))                  
           df = pd.read_html(StringIO(r.text),thousands=",")[0]
           #df = pd.read_html(r.text,thousands=",")[0]
+     else : 
+         print('url:' , url  , ' get is failed')
 
-     df_len = len(df.columns)
      df.columns= llist(len(df.columns)) ##編列columns
      
      ### 0,1,4,10,11,18 /*sii*/
@@ -252,7 +254,7 @@ def Rep_3_Investors(date_sii,date_otc,com_lists) :
      
      dfs = pd.concat([dfs,df],ignore_index=True) ##合併
           
-     time.sleep(1)
+     time.sleep(10)
      #time.sleep(random.randrange(1, 3, 1))
      u_index += 1
 
@@ -290,14 +292,13 @@ def Rep_price(date_sii,date_otc,com_lists):
        dfs = pd.DataFrame()
        for url in url_list :
               
-              r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+              r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False,timeout=15)
               r.encoding = 'utf8'
               if u_index == 0 :
                 df = pd.read_html(StringIO(r.text),thousands=",")[8] ## []list to pandas
               else : 
                 df = pd.read_html(StringIO(r.text),thousands=",")[0] ## []list to pandas
               
-              df_len = len(df.columns)
               df.columns= llist(len(df.columns)) ##編列columns
               df = df[df[0].isin(com_lists)] ##比對
               
@@ -319,7 +320,7 @@ def Rep_price(date_sii,date_otc,com_lists):
               dfs = pd.concat([dfs,df],ignore_index=True) ##合併
               #dfs[3] = df[3].fillna(0)
                    
-              time.sleep(1)
+              time.sleep(10)
               u_index += 1
               #print(df.info())
        dfs = dfs.fillna(0)
@@ -381,8 +382,11 @@ df_Rep_price = Rep_price(date_sii,date_otc,com_lists)
 
 
 df_s = pd.merge(df_Rep_3_Investors,df_Rep_price, on =['公司代號']) ##dataframe join by columns
+#print(dfs.info())
 #df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
-df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').str.replace('除權','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
+#df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').str.replace('除權','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
+### 20260726 bug 除權息/除權
+df_s['漲跌(+/-)'] = df_s['漲跌(+/-)'].str.replace('X','').str.replace('除息','0').str.replace(' ---','0').str.replace('--- ','0').str.replace('除權息','0').str.replace('除權','0').astype({'漲跌(+/-)':'float'}).fillna(0).round(2)
 df_s = df_s.iloc[:,[0,1,2,3,4,5,7,8]]
 match_row = df_s.sort_values(by=['漲跌(+/-)'],ascending=False,ignore_index= True).copy()
 
@@ -621,7 +625,9 @@ def plot_Rep_3_Investors_price(match_row) :
                 size=10, va="center")
 
      plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
-     plt.clf()
+     #plt.clf()
+     ### shuts down the figure window frees system memory at the end  
+     plt.close(ax.get_figure())  
 
 
 
@@ -661,7 +667,7 @@ plot_Rep_3_Investors_price(match_row.iloc[:,[0,9]])
 
 match_row['con_days'] = match_row['con_days'].astype('int64')
 
-for  idx in range(1,11,1) :
+for  idx in range(0,11,1) :
 
     match_row[match_row.columns[idx]] = match_row[match_row.columns[idx]].astype(object)
 
