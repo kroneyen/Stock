@@ -21,6 +21,7 @@ from io import StringIO
 import urllib3
 ### disable  certificate verification
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import fetch_url
 
 # 改style要在改font之前
 plt.style.use("seaborn-v0_8")
@@ -165,7 +166,8 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     #u_index = 0
     for url in url_list : 
        dfs=pd.DataFrame()
-       r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+       #r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+       r = fetch_url.fetch(url) 
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -183,7 +185,7 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 
        df_f = pd.concat([df_f,dfs],ignore_index=True) ###合併
 
-       time.sleep(1)
+       time.sleep(5)
 
 
     df_f[0]= df_f[0].astype('str')
@@ -199,7 +201,7 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
 
 def Rep_price(date_sii,date_otc,com_lists):
 
-       url_sii = 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=' + date_sii + '&type=ALL'
+       url_sii = 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=' + date_sii + '&type=ALLBUT0999'
        #https://www.twse.com.tw/exchangeReport/MI_INDEX?response=html&date=20210910&type=ALL
 
        url_otc = 'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=' + date_otc +'&o=htm&s=0,asc,0'
@@ -210,7 +212,9 @@ def Rep_price(date_sii,date_otc,com_lists):
        u_index = 0
        dfs = pd.DataFrame()
        for url in url_list :
-              r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+
+              #r = requests.get(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+              r = fetch_url.fetch(url)
               r.encoding = 'utf8'
               if u_index == 0 :
                 df = pd.read_html(StringIO(r.text),thousands=",")[8] ## []list to pandas
@@ -307,6 +311,10 @@ def stock_season_roa_roe(year, season, com_lists):
 
           df_list = df.columns
           last_col_num=len(df_list) -1
+          
+
+          #print('df_b:',df.info())
+          #print('df_list:',df_list)
 
 
           if last_col_num == 21 :
@@ -328,7 +336,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
                 df.columns= llist(len(df.columns))
 
-          if last_col_num == 29 :
+          elif last_col_num == 29 :
 
              #print(df_list[19] , df_list[29])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -336,7 +344,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          if last_col_num == 22 :
+          elif last_col_num == 22 :
 
              #print(df_list[12] , df_list[22])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -345,16 +353,25 @@ def stock_season_roa_roe(year, season, com_lists):
              df.columns= llist(len(df.columns))
 
 
-          if last_col_num == 17 :
+          elif last_col_num == 17 :
 
              #print(df_list[8] , df_list[17]) 
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
              df = df.iloc[:,[0,1,8,last_col_num]] ## 每年欄位不同   
 
              df.columns= llist(len(df.columns))
+          
+          elif last_col_num < 17:
+
+             ### data not complete 20260514
+             df = pd.DataFrame()
 
 
-          dfs_b = pd.concat([dfs_b,df],ignore_index=True) ##合併
+          if not df.empty :
+
+             dfs_b = pd.concat([dfs_b,df],ignore_index=True) ##合併
+
+
        else : ### for 資產負債表Balance
 
         for i in range(1,len(tables)+1) :
@@ -364,8 +381,19 @@ def stock_season_roa_roe(year, season, com_lists):
 
           df_list = df.columns
           last_col_num=len(df_list) -1
+          
+          """ 
+          print('df_a:',df.info()) 
+          print('df_list:',df_list)
+          try :
 
+              df = df.loc[:,['公司 代號','公司名稱','資產總額','權益總額']]
+          except :    
 
+              df = df.loc[:,['公司 代號','公司名稱','資產總計','權益總計']]
+              
+
+          """
           if last_col_num == 56 :
 
             if re.search("其他資產－淨額",df_list[23]) :
@@ -386,7 +414,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
                df.columns= llist(len(df.columns))
 
-
+          ### 20260512 改版
           if last_col_num == 22 :
 
              #print(df_list[4] , df_list[18])
@@ -395,7 +423,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          if last_col_num == 48 :
+          elif last_col_num == 48 :
 
              #print(df_list[15] , df_list[44])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -403,7 +431,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          if last_col_num == 21 :
+          elif last_col_num == 21 :
 
              #print(df_list[4] , df_list[17])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -411,7 +439,35 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          dfs_a = pd.concat([dfs_a,df],ignore_index=True) ##合併
+          ### 20260515 改版
+          elif last_col_num ==52 :
+             # 25  資產總計 / 56  權益總計
+             #print(df_list[4] , df_list[18])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,23,48]] ## 每年欄位不同
+
+             df.columns= llist(len(df.columns))
+
+
+          ### 20260512 改版 
+          elif last_col_num >= 60 :
+             # 25  資產總計 / 56  權益總計
+             #print(df_list[4] , df_list[18])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,25,56]] ## 每年欄位不同 
+
+             df.columns= llist(len(df.columns))
+          
+          ### data not complete 20260514
+          else :
+             # print('df_a:'df.info())
+             df = pd.DataFrame()
+
+          #finally:
+          if not df.empty :
+
+                dfs_a = pd.concat([dfs_a,df],ignore_index=True) ##合併
+
 
        time.sleep(1)
 
@@ -591,7 +647,10 @@ def plot_Stock_Eps_Yield_PE_Season(season,year,plot_code):
           plt.ylabel("PE")
           #plt.show()
           plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
-          plt.clf()
+          #plt.clf()
+          ### shuts down the figure window frees system memory at the end  
+          plt.close(ax.get_figure())
+          
 
 
 def Reasonable_Price(limit_y) :
@@ -750,7 +809,7 @@ mydoc_code_lists=[]
 
 mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
 
-if len(list(mydoc_season)) == 0  and season >1:
+if len(list(mydoc_season)) == 0:
     
     ### get last_year_season
     #yy ,season = get_last_year_season(season)
@@ -855,7 +914,13 @@ date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().str
 
 ### get  data from DB
 
-mydoc = Rep_price(date_sii,date_otc,com_lists)
+#mydoc = Rep_price(date_sii,date_otc,com_lists)
+### remove get data from web ,change from Stock_Price_Daily
+
+mydoc_price = read_mongo_db('stock','Stock_Price_Daily',{'last_modify':date_sii},{"_id":0,"last_modify":0})
+
+mydoc =  pd.DataFrame(list(mydoc_price))
+
 
 #match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
 ### merge price
@@ -1130,7 +1195,9 @@ for idx_com in [com_list, com_lists] :
     match_row.iloc[:,0] = match_row.iloc[:,0].apply(lambda  x: f'<a href="https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID=%s" target="_blank">%s</a>' %( x , x )  if  pd.notnull(x)   else  x)
 
     ### color for PE
-    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+    #match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))
+    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else  f'<p style="background-color:LavenderBlush;">%s</p>' % x  if x <10 else str(x))
+
 
     match_row=match_row.iloc[:,range_s:range_d].copy() ### remove 5avg_yield
 

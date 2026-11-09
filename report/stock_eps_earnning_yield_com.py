@@ -20,7 +20,7 @@ from io import StringIO
 import urllib3
 ### disable  certificate verification
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+import fetch_url
 
 
 # 改style要在改font之前
@@ -167,7 +167,8 @@ def stock_season_report(year, season, yoy_up,yoy_low,com_lists):
     #u_index = 0
     for url in url_list : 
        dfs=pd.DataFrame()
-       r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+       #r =  requests.post(url ,  headers={ 'user-agent': user_agent.random },verify=False)
+       r = fetch_url.fetch(url)
        r.encoding = 'utf8'
        soup = BeautifulSoup(r.text, 'html.parser')
        tables = soup.find_all('table',attrs={"class": "hasBorder"})
@@ -330,7 +331,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
                 df.columns= llist(len(df.columns))
 
-          if last_col_num == 29 :
+          elif last_col_num == 29 :
 
              #print(df_list[19] , df_list[29])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -338,7 +339,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          if last_col_num == 22 :
+          elif last_col_num == 22 :
 
              #print(df_list[12] , df_list[22])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -347,7 +348,7 @@ def stock_season_roa_roe(year, season, com_lists):
              df.columns= llist(len(df.columns))
 
 
-          if last_col_num == 17 :
+          elif last_col_num == 17 :
 
              #print(df_list[8] , df_list[17]) 
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -356,7 +357,18 @@ def stock_season_roa_roe(year, season, com_lists):
              df.columns= llist(len(df.columns))
 
 
-          dfs_b = pd.concat([dfs_b,df],ignore_index=True) ##合併
+          elif last_col_num < 17:
+
+             ### fix bug data not complete 20260514
+             df = pd.DataFrame()
+
+
+          if not df.empty :
+
+             dfs_b = pd.concat([dfs_b,df],ignore_index=True) ##合併
+             
+
+
        else : ### for 資產負債表Balance
 
         for i in range(1,len(tables)+1) :
@@ -388,8 +400,8 @@ def stock_season_roa_roe(year, season, com_lists):
 
                df.columns= llist(len(df.columns))
 
-
-          if last_col_num == 22 :
+          ### 20260512 改版
+          elif last_col_num == 22 :
 
              #print(df_list[4] , df_list[18])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -397,7 +409,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          if last_col_num == 48 :
+          elif last_col_num == 48 :
 
              #print(df_list[15] , df_list[44])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -405,7 +417,7 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          if last_col_num == 21 :
+          elif last_col_num == 21 :
 
              #print(df_list[4] , df_list[17])
              df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
@@ -413,7 +425,26 @@ def stock_season_roa_roe(year, season, com_lists):
 
              df.columns= llist(len(df.columns))
 
-          dfs_a = pd.concat([dfs_a,df],ignore_index=True) ##合併
+          ### 20260512 改版
+          elif last_col_num >= 60 :
+             # 25  資產總計 / 56  權益總計
+             #print(df_list[4] , df_list[18])
+             df.columns= llist(len(df.columns)) ##重新編列columns  0 ,1 ,2
+             df = df.iloc[:,[0,1,25,56]] ## 每年欄位不同
+
+             df.columns= llist(len(df.columns))
+
+          ### data not complete 20260514
+          elif last_col_num < 21:
+
+             df = pd.DataFrame()
+
+
+          if not df.empty :
+
+             dfs_a = pd.concat([dfs_a,df],ignore_index=True) ##合併
+
+
 
        time.sleep(1)
 
@@ -591,7 +622,10 @@ def plot_Stock_Eps_Yield_PE_Season(season,year,com_list):
           plt.ylabel("PE")
           #plt.show()
           plt.savefig('./images/image_'+ str(idx) +'_'+ str(idx+4) +'.png' )
-          plt.clf()
+          #plt.clf()
+          ### shuts down the figure window frees system memory at the end  
+          plt.close(ax.get_figure())
+          
 
 
 
@@ -764,12 +798,14 @@ except :
 mydoc_code_lists=[]
 
 #print('yy:',yy , 'season:',season)
+## yy 2026 last 2025 season 4
 
 ### compare season report & com_lists  count
 
 mydoc_season = read_mongo_db('stock','Rep_Stock_Season_Com',{"years":str(yy),"season":str(season)},{"season":0,"years":0,"_id":0,"Net_Income":0,"Asset":0,"Equity":0})
 
-if len(list(mydoc_season)) == 0  and season >1:
+### get last season data
+if len(list(mydoc_season)) == 0 :
     
     ### get last_year_season
     yy ,season = get_last_year_season(season)
@@ -925,10 +961,15 @@ date_sii = last_modify
 date_otc = str( int(datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('%Y')) - 1911)  + datetime.datetime.strptime(last_modify, '%Y%m%d').date().strftime('/%m/%d')
 
 
+
 ### get  data from DB
 
-mydoc = Rep_price(date_sii,date_otc,com_lists)
+#mydoc = Rep_price(date_sii,date_otc,com_lists)
+### remove get data from web ,change from Stock_Price_Daily
 
+mydoc_price = read_mongo_db('stock','Stock_Price_Daily',{'last_modify':date_sii},{"_id":0,"last_modify":0})
+
+mydoc =  pd.DataFrame(list(mydoc_price))
 
 
 #match_row.rename(columns={'公司代號': 'code', '公司名稱': 'code_name'}, inplace=True)
@@ -1222,7 +1263,8 @@ for idx_com in [com_list, com_lists] :
     ### sort columns 
     match_row=match_row.sort_values(by=check_sort_column,ascending = check_assc ,ignore_index = True)
     ### PE by sort
-    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))  
+    #match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else str(x))  
+    match_row.iloc[:,7] = match_row.iloc[:,7].apply(lambda  x: f'<font color="green">%s</font>' % x if x < 0 else  f'<p style="background-color:LavenderBlush;">%s</p>' % x  if x <10 else str(x))  
     
     match_row=match_row.iloc[:,range_s:range_d].copy() ### remove 5avg_yield
     
